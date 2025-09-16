@@ -320,6 +320,7 @@ detect_language() {
 	fi
 }
 
+# Make paths arrays (OPF_FILES, NCX_FILES) of input EPUBs
 get_opf_ncx_array() {
 	for i in "${!EPUB_FILES[@]}"; do
 		# "$i"/* hides hidden dir in $i
@@ -411,7 +412,7 @@ find_file() {
 	find "$1" -type f -iname "$pattern" | head -1
 }
 
-# Generate NCX table of contents
+# Generate table of contents
 generate_ncx() {
 	local lang="$1"
 	local volume_prefix volume_suffix
@@ -536,7 +537,7 @@ fix_ttf_path_in_extracted_opf() {
         sed -E 's#href=["'"'"'].*/[^"'"'"']*/([^/]+\.(ttf|otf))["'"'"']#href="fonts/\1"#gi'
 }
 
-# For macOS
+# Is NFC better than NFD for Linux users?
 encode_nfc(){
 	if [ -n "$ICONV_HAS_UTF_8_MAC" ]; then
 		iconv -f UTF-8-MAC -t UTF-8 "$1" > "$1.nfc" 2>/dev/null \
@@ -590,7 +591,7 @@ backup_extracted_opf_ncx_for_epub_split() {
 	done
 }
 
-# Consolidate merge new ebook archive
+# Consolidate merged archive and remove unused
 consolidate_contents() {
 	# Move all font files to central location
 	mkdir fonts
@@ -769,7 +770,7 @@ main() {
 		validate_epub "$epub"
 	done
 
-	debug "Sort input files and save the to EPUB_FILES"
+	debug "Sort input files and save them to EPUB_FILES"
 	sort_input_files "$@"
 
 	debug "Generating merged EPUB..."
@@ -782,7 +783,7 @@ main() {
 	extract_epubs
 
 	# `cd` should be done after extracting args
-	debug "Now, we move to real working directory"
+	debug "Now, we move to working directory"
 	cd "$TEMP_DIR"
 
 	debug "Get paths lists (OPF_FILES, NCX_FILES)"
@@ -801,13 +802,13 @@ main() {
 	debug 'Backup [0-9]*/**/*.opf|ncx to ".epub-merged/'
 	backup_extracted_opf_ncx_for_epub_split
 
-	# Consolidate merge new ebook archive and remove unused
+	debug "Consolidate merged archive and remove unused"
 	consolidate_contents
 
-	# Finalize metadata
+	debug "Finalize metadata"
 	finalize_metadata
 
-	# Create final EPUB
+	debug "Create final EPUB"
 	create_epub "$output_name"
 }
 
