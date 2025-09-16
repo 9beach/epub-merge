@@ -14,7 +14,7 @@
 - Creates a new volume-based table of contents structure at the top level
 - Automatically generates book title and filename from common parts of input files (can be customized with `-n` option)
 - Removes duplicate fonts to reduce overall file size
-- **Smart volume labeling:** Detects language from EPUB metadata or content analysis, then applies appropriate cultural conventions:
+- Detects language from EPUB metadata or content analysis, then applies appropriate cultural conventions:
   - Korean: `제 1권`, `제 2권`
   - Chinese: `第1卷`, `第2卷`
   - Japanese: `第1巻`, `第2巻`
