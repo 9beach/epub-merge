@@ -359,21 +359,21 @@ get_volume_labels() {
 			ja) prefix='第' ;;
 			es) prefix='Volumen ' ;;
 			fr) prefix='Volume ' ;;
-			de) prefix='Band ' ;;
+			de) prefix='' ;;
 			ru) prefix='Том ' ;;
 			*) prefix='Volume ' ;;
 		esac
 	fi
-
 	if [[ -z "${TOC_VOLUME_SUFFIX_OFF:-}" && -z "$suffix" ]]; then
 		case "$lang" in
 			ko) suffix='권' ;;
 			zh) suffix='卷' ;;
 			ja) suffix='巻' ;;
+			de) suffix='. Band' ;;
 			*) suffix='' ;;
 		esac
 	fi
-
+	
 	echo "$prefix^$suffix"
 }
 
