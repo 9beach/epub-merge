@@ -110,19 +110,19 @@ debug_var() {
 }
 
 parse_opts() {
-       while getopts "n:l:s:p:SOqx" opt; do
-                case "$opt" in
-                        n) EPUB_NAME="$OPTARG" ;;          # -n filename
-                        l) EPUB_LANG="$OPTARG" ;;          # -l lang
-                        p) TOC_VOLUME_PREFIX="$OPTARG" ;;  # -p volume prefix
-                        s) TOC_VOLUME_SUFFIX="$OPTARG" ;;  # -s volume suffix
-                        S) TOC_VOLUME_SUFFIX_OFF=1 ;;      # -S disable suffix
-                        O) DO_NOT_SORT_PARAMS=1 ;;         # -O disable sorting
-                        q) QUIET=1 ;;                      # -q quiet mode
-                        x) EXTRACT_MODE=1 ;;               # -x extract mode
-                        \?) show_usage; exit 1 ;;
-                esac
-        done
+	while getopts "n:l:s:p:SOqx" opt; do
+		case "$opt" in
+			n) EPUB_NAME="$OPTARG" ;;          # -n filename
+			l) EPUB_LANG="$OPTARG" ;;          # -l lang
+			p) TOC_VOLUME_PREFIX="$OPTARG" ;;  # -p volume prefix
+			s) TOC_VOLUME_SUFFIX="$OPTARG" ;;  # -s volume suffix
+			S) TOC_VOLUME_SUFFIX_OFF=1 ;;      # -S disable suffix
+			O) DO_NOT_SORT_PARAMS=1 ;;         # -O disable sorting
+			q) QUIET=1 ;;                      # -q quiet mode
+			x) EXTRACT_MODE=1 ;;               # -x extract mode
+			\?) show_usage; exit 1 ;;
+		esac
+	done
 
 	readonly DO_NOT_SORT_PARAMS
 	readonly QUIET
