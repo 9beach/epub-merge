@@ -114,7 +114,7 @@ parse_opts() {
                         O) DO_NOT_SORT_PARAMS=1 ;;         # -O disable sorting
                         q) QUIET=1 ;;                      # -q quiet mode
                         x) EXTRACT_MODE=1 ;;               # -x extract mode
-                        \?) echo show_usage; exit 1 ;;
+                        \?) show_usage; exit 1 ;;
                 esac
         done
 
