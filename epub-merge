@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-# EPUB Merge Script - Combines multiple EPUB files into a single volume
+#  epub-merge - combines multiple EPUB files into a single volume, or 
+#  extracts merged EPUB files
 
 # Display usage information
 show_usage() {
@@ -248,7 +249,6 @@ get_output_name() {
 		base2="$(basename "$2")"
 		output_name="$(get_common_prefix "$base1" "$base2")"
 	fi
-
 
 	if [[ -z "$output_name" ]]; then
 		error_message="Cannot determine output name from '$1' and '$2'."
@@ -507,7 +507,6 @@ generate_opf() {
 			s:ref=[\"'][^\"']*:&-${i}:g
 			p
 		}" "$cur_opf" >> "$spine_file"
-
 
 		# Extract manifest entries with unique IDs and corrected paths
 		# old_path_from_old_opf -> path_to_old_opf/old_path_from_old_opf
