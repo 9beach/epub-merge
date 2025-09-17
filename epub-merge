@@ -58,15 +58,16 @@ START_DIR="$(pwd)"
 readonly START_DIR
 
 # If set 1, print debug message
-DEBUG=${DEBUG:-}
-readonly DEBUG
+readonly DEBUG=${DEBUG:-}
 
 # If this variable is set, the content.opf of the merged EPUB and the filenames
 # of the split EPUBs
 ICONV_HAS_UTF_8_MAC="$(iconv -l | grep "UTF-8-MAC")"
 readonly ICONV_HAS_UTF_8_MAC
 
-# Below variables capital letters are almost readonly
+# Capital letter variables below: null initially, set once at startup, 
+# then readonly
+
 # Sorted file paths to merge to single volume EPUB
 EPUB_FILES=() 
 
@@ -91,7 +92,7 @@ TOC_VOLUME_PREFIX=""
 # Suffix for TOC volume labels
 TOC_VOLUME_SUFFIX=""
 
-# If user gave $TOC_VOLUME_PREFIX or $TOC_VOLUME_SUFFIX, then set to "1" and
+# If user gave $TOC_VOLUME_PREFIX or $TOC_VOLUME_SUFFIX, then 
 # `detect_volume_labels` will be skipped 
 TOC_VOLUME_LABELS_GIVEN=""
 
@@ -174,7 +175,7 @@ parse_opts() {
 	while getopts "n:t:l:s:p:Oqx" opt; do
 		case "$opt" in
 			n) EPUB_NAME="$OPTARG" ;;             # filename
-			n) EPUB_TITLE="$OPTARG" ;;            # title
+			t) EPUB_TITLE="$OPTARG" ;;            # title
 			l) EPUB_LANG="$OPTARG" ;;             # lang
 			p) TOC_VOLUME_PREFIX="$OPTARG"; \
 				TOC_VOLUME_LABELS_GIVEN=1 ;;  # volume prefix
@@ -287,9 +288,11 @@ validate_epub() {
 #      "file-(i)", "file-(ii)" -> "file"
 get_common_prefix() {
 	local file1="$1" file2="$2"
-	local base1="$(basename "$file1")" base2="$(basename "$file2")"
-	local common="" min_length
-	local min_length=$((${#base1} < ${#base2} ? ${#base1} : ${#base2}))
+	local base1
+	base1="$(basename "$file1")" base2="$(basename "$file2")"
+	local common=""
+	local min_length
+	min_length=$((${#base1} < ${#base2} ? ${#base1} : ${#base2}))
 
 	for ((i=0; i<min_length; i++)); do
 		if [[ "${base1:i:1}" == "${base2:i:1}" ]]; then
@@ -324,7 +327,6 @@ get_filename_and_title() {
 
 	if [[ -f "$EPUB_NAME.epub" ]]; then
 		error "Output file already exists: $EPUB_NAME.epub"
-		exit 1
 	fi
 
 	EPUB_TITLE="${EPUB_TITLE:-$EPUB_NAME}"
@@ -612,8 +614,13 @@ generate_opf() {
 			p
 		}" "$cur_opf" >> "$spine_file"
 
-		# Extract manifest entries with unique IDs and corrected paths
-		# old_path_from_old_opf -> path_to_old_opf/old_path_from_old_opf
+		# Extract manifest entries with unique IDs and corrected paths.
+		#
+		# Since the OPF file is now in the root directory, the new 
+		# resource path relative to the OPF is formed by concatenating 
+		# the path from the root to the old OPF directory (dirname) 
+		# with the original resource path. 
+		# Here, $cur_opf_dir acts as the prefix.
 		sed -n "/manifest/,/\/manifest/{
 			s:id=[\"'][^\"']*:&-${i}:g
 			s:href=[\"']:&$cur_opf_dir/:g
@@ -665,16 +672,21 @@ backup_extracted_opf_ncx_for_epub_split() {
 
 	for i in "${!EPUB_FILES[@]}"; do
 		local cur_opf="${OPF_FILES[i]}"
-		local cur_opf_dir="$(dirname "$cur_opf")"
+		local cur_opf_dir
+		cur_opf_dir="$(dirname "$cur_opf")"
 
 		local cur_ncx="${NCX_FILES[i]}"
-		local cur_ncx_dir="$(dirname "$cur_ncx")"
+		local cur_ncx_dir
+		cur_ncx_dir="$(dirname "$cur_ncx")"
 
-		local split_ncx_dir="$(echo "$cur_ncx_dir/" | sed -e "s:^$i/::" -e "s://:/:" -e "s:^$:.:")"
-		local split_opf_dir="$(echo "$cur_opf_dir/" | sed -e "s:^$i/::" -e "s://:/:" -e "s:^$:.:")"
+		local split_ncx_dir
+		split_ncx_dir="$(echo "$cur_ncx_dir/" | sed -e "s:^$i/::" -e "s://:/:" -e "s:^$:.:")"
+		local split_opf_dir
+		split_opf_dir="$(echo "$cur_opf_dir/" | sed -e "s:^$i/::" -e "s://:/:" -e "s:^$:.:")"
 
 		# Extract current NCX manifest ID from first OPF
-		local cur_ncx_id="$(grep "$(basename "$cur_ncx")" "$cur_opf" \
+		local cur_ncx_id
+		cur_ncx_id="$(grep "$(basename "$cur_ncx")" "$cur_opf" \
 			| sed -n 's/.*id="\([^"]*\)".*/\1/p')"
 
 		if [ -z "$cur_ncx_id" ]; then
@@ -724,11 +736,14 @@ consolidate_contents() {
 	update_font_references
 }
 
-# Calculate relative path from file to root while merging EPUBs
+# Calculate relative path from file to root
+# Example:
+#   a/b/c.txt -> "../.."
+#   a/b.txt   -> ".."
 #
 # in: filepath
 # echo: relative_path
-get_relative_path_to_root() {
+path_to_root() {
 	local parent
 	parent="$(dirname "$1" | sed -e 's:^\./::')"
 
@@ -739,11 +754,19 @@ get_relative_path_to_root() {
 	fi
 }
 
-# One depth less than `get_relative_path_to_root'
+# Returns the relative path to one level below the root (with a trailing '/').
+# Example:
+#   a/b/c.txt -> "../"
+#   a/b.txt   -> ""
+#
+#   # Not ideal, but we assume $i is always within a trunk and the
+#   # path is always normalized
+#   a.txt -> ""
+#   ../../a.txt -> ".."
 #
 # in: filepath
 # echo: relative_path
-get_relative_path_to_root_while_splitting() {
+path_to_trunk() {
         local parent
         parent="$(dirname "$(dirname "$1" | sed -e 's:^\./::')")"
 
@@ -754,20 +777,22 @@ get_relative_path_to_root_while_splitting() {
         fi
 }
 
-# Update font paths in CSS files
-#
-# a/b/style.css, url(../../x/y/font.ttf) -> ../../../../fonts/font.ttf
+# Update font paths in CSS files while merging EPUBs
 #
 # set: file
 update_font_references() {
-	for css_file in $(find . -type f -iname "*.css"); do
-		pattern='url\([^)]*/([^/]+\.(ttf|otf))[^)]*\)'
-		dir="$(get_relative_path_to_root "$css_file")"
+	find . -type f -iname "*.css" -print0 | while IFS= read -r -d '' css; do
+		local pattern='url\([^)]*/([^/]+\.(ttf|otf))[^)]*\)'
+
+		# New path from css to font is the concatenation of path from 
+		# css to altered root and altered font path (/fonts)
+		dir="$(path_to_root "$css")"
 		replacement="url($dir/fonts/\\1)"
 
-		sed -E "s#${pattern}#${replacement}#gi" "$css_file" \
+		sed -E "s#${pattern}#${replacement}#gi" "$css" \
 			| grep -iv "url(eOpenBooks.ttf)" \
-			> "$css_file.tmp" && mv "$css_file.tmp" "$css_file"
+			> "$css.tmp" \
+			&& mv "$css.tmp" "$css"
 	done
 }
 
@@ -784,7 +809,8 @@ fix_0_ttf_path_in_opf() {
 # ref: $FIRST_NCX_ID
 # set: file
 finalize_metadata() {
-	local uuid="$(uuidgen)"
+	local uuid
+	uuid="$(uuidgen)"
 	local uuid_pattern='[0-9a-fA-F]\{8\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{12\}'
 
 	# Update OPF with new UUID and clean paths
@@ -846,21 +872,24 @@ extract_merged_epub() {
 	cd "$TEMP_DIR"
 
 	local count
-	count=$(ls "$TEMP_DIR"/.epub-merge/*.opf | wc -l)
+	count="$(ls .epub-merge/*.opf | wc -l)"
+
 	local counts
-	counts=($(seq 0 $((count - 1))))
+	read -a counts <<< "$(seq 0 $((count - 1)))"
+
 	local pattern='url\([^)]*/([^/]+\.(ttf|otf))[^)]*\)'
 
 	# Update font paths in all CSS files to point to centralized fonts 
 	# directory
-	for css in $(find . -type f -iname "*.css"); do
+	find . -type f -iname "*.css" -print0 | while IFS= read -r -d '' css; do
 		local root_path
-		root_path="$(get_relative_path_to_root_while_splitting "$css")"
+		root_path="$(path_to_trunk "$css")"
 		local replacement="url(${root_path}fonts/\\1)"
 
 		sed -E "s#${pattern}#${replacement}#gi" "$css" \
 			| grep -iv "url(eOpenBooks.ttf)" \
-			> "$css.tmp" && mv "$css.tmp" "$css"
+			> "$css.tmp" \
+			&& mv "$css.tmp" "$css"
 	done
 
 	for i in "${counts[@]}"; do
