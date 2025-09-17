@@ -511,6 +511,9 @@ find_file() {
 }
 
 # Generate table of contents
+#
+# ref: $NCX_FILES, $EPUB_FILES, $TOC_VOLUME_PREFIX, $TOC_VOLUME_SUFFIX
+# set: file
 generate_ncx() {
 	detect_volume_labels
 
