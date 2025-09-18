@@ -1,31 +1,86 @@
 #!/bin/bash
 
-# WARNING: Local use only - do not run elsewhere
-
 set -euo pipefail
 trap 'echo "Error at line $LINENO" >&2' ERR INT TERM
 
+readonly AUTHOR_LOCAL_ENV=${AUTHOR_LOCAL_ENV:-0}
+TARGET_DIR=""
+
+cleanup() {
+        if [[ "$AUTHOR_LOCAL_ENV" == 0 && -n "$TARGET_DIR" ]]; then
+                rm -fr "$TARGET_DIR"
+        fi
+}
+
+trap cleanup EXIT
+
+if [[ $AUTHOR_LOCAL_ENV == 1 ]]; then
+	# WARNING: Local use only - do not run elsewhere
+	SOURCE_DIR="/Volumes/Norway/Backup/Test/epub-test"
+	TARGET_DIR="$HOME/Test/epub-test"
+else
+	SOURCE_DIR="$(dirname "$0")/samples"
+	TARGET_DIR="$(mktemp -d)"
+fi
+
+epub_diff() {
+	local source_dir="${SOURCE_DIR:-/default/path}"
+	"${source_dir}/../epub-diff.sh" "$@"
+}
+
+ARG=""
+
+if [[ $# -eq 0 ]]; then
+	ARG=clean
+elif [[ $# -eq 1 ]]; then
+	ARG="$1"
+else
+	echo "Bad argument" >&2
+	exit 1
+fi
+
+case "$ARG" in
+	clean)
+		rm -rf "$TARGET_DIR/.merged/" \
+			"$TARGET_DIR/.splitted/" \
+			"$TARGET_DIR/.splitted-merged/"
+		;;
+	merge)
+		rm -rf "$TARGET_DIR/.merge/"
+		;;
+	split)
+		rm -rf "$TARGET_DIR/.splitted/"
+		;;
+	merge-splitted)
+		rm -rf "$TARGET_DIR/.splitted-merged/"
+		;;
+	*)
+		echo $ARG
+		echo "Bad argument" >&2
+		exit 1
+		;;
+esac
+
 if [[ $# -eq 1 && ( "$1" = "clean" || "$1" = "clear" ) ]]; then
-	rm -rf "$HOME/Test/epub-test/.merged/" \
-		"$HOME/Test/epub-test/.merged-splitted/" \
-		"$HOME/Test/epub-test/.splitted/"
+	rm -rf "$TARGET_DIR/.merged/" \
+		"$TARGET_DIR/.splitted-merged/" \
+		"$TARGET_DIR/.splitted/"
 fi
 
 tcd() {
-	[[ -d ~/Test/epub-test/"$1"/ ]] && exit
-	rm -rf ~/Test/epub-test/"$1"/
-	mkdir -p ~/Test/epub-test/"$1"/
-	cd ~/Test/epub-test/"$1"/
+	[[ -d "$TARGET_DIR/$1" ]] && exit
+	rm -rf "$TARGET_DIR/$1"
+	mkdir -p "$TARGET_DIR/$1"
+	cd "$TARGET_DIR/$1"
 }
 
 (
-	[[ -d ~/Test/epub-test ]] && exit
+	[[ -d "$TARGET_DIR/merged" ]] && exit
 	echo ++ Test unit: setup
 
-	mkdir -p ~/Test/epub-test
-	rsync -a --delete --exclude .merged --exclude .merged-splitted \
-		--exclude .splitted /Volumes/Norway/Backup/Test/epub-test/ \
-		~/Test/epub-test
+	mkdir -p "$TARGET_DIR"
+	rsync -a --delete --exclude .merged --exclude .splitted-merged \
+		--exclude .splitted "$SOURCE_DIR/" "$TARGET_DIR"
 )
 
 (
@@ -36,7 +91,7 @@ tcd() {
 		epub-merge -q ../original/"$line"*.epub
 	done
 
-	cd merged
+	cd ../merged
 	for i in *.epub; do
 		epub-diff.sh "$i" ../.merged/"$i"
 	done
@@ -57,16 +112,16 @@ tcd() {
 )
 
 (
-	tcd .merged-splitted
+	tcd .splitted-merged
 	echo ++ Test unit: merge-splitted
 
 	ls ../merged | sed -e 's/.epub//' | while read -r line; do
 		epub-merge -q ../splitted/"$line"*.epub
 	done
 
-	cd merged
+	cd ../merged
 	for i in *.epub; do
-		epub-diff.sh "$i" ../.merged-splitted/"$i"
+		epub-diff.sh "$i" ../.splitted-merged/"$i"
 	done
 )
 

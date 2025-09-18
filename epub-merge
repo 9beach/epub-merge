@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#  epub-merge - combines multiple EPUB files into a single volume, or 
-#  extracts merged EPUB files
+#  epub-merge - combines multiple ePUB files into a single volume, or 
+#  extracts merged ePUB files
 
 set -euo pipefail
 
@@ -12,8 +12,8 @@ trap 'echo "Error at line $LINENO" >&2; cleanup' ERR INT TERM
 show_usage() {
 	cat >&2 << 'EOF'
 NAME
-     epub-merge - combines multiple EPUB files into a single volume, or 
-     extracts merged EPUB
+     epub-merge - combines multiple ePUB files into a single volume, or 
+     extracts merged ePUB
 
 SYNOPSIS
      epub-merge [OPTIONS] epub1 epub2 [epub3 ...]
@@ -27,7 +27,7 @@ OPTIONS
      -s suffix      Suffix for TOC volume labels
      -O             Disable natural sorting of input files
      -q             Suppress progress messages
-     -x             Extract mode: split merged EPUB back to original files
+     -x             Extract mode: split merged ePUB back to original files
 
 EXAMPLES
      epub-merge love-10.epub love-8.epub love-9.epub
@@ -53,23 +53,23 @@ EXAMPLES
 EOF
 }
 
-# Extract input EPUBs here
+# Extract input ePUBs here
 START_DIR="$(pwd)"
 readonly START_DIR
 
 # If set 1, print debug message
 readonly DEBUG=${DEBUG:-}
 
-# If this variable is set, the content.opf of the merged EPUB and the filenames
-# of the split EPUBs
+# If this variable is set, the content.opf of the merged ePUB and the filenames
+# of the split ePUBs
 ICONV_HAS_UTF_8_MAC="$(iconv -l | grep "UTF-8-MAC")"
 readonly ICONV_HAS_UTF_8_MAC
 
 # Capital letter variables below: null initially, set once at startup, 
 # then readonly
 
-# Sorted file paths to merge to single volume EPUB
-EPUB_FILES=() 
+# Sorted file paths to merge to single volume ePUB
+ePUB_FILES=() 
 
 # OPF file paths to merge
 OPF_FILES=()
@@ -80,10 +80,10 @@ NCX_FILES=()
 # NCX id in OPF_FILES[0]
 FIRST_NCX_ID=""
 
-# Working directory to extract EPUBs
+# Working directory to extract ePUBs
 TEMP_DIR=""
 
-# Stores the content of `zip -l EPUB`
+# Stores the content of `zip -l ePUB`
 ZIP_CONTENT_PATH=""
 
 # Prefix for TOC volume labels
@@ -97,13 +97,13 @@ TOC_VOLUME_SUFFIX=""
 TOC_VOLUME_LABELS_GIVEN=""
 
 # Custom output filename (without extension)
-EPUB_NAME="" 
+ePUB_NAME="" 
 
 # Custom output title
-EPUB_TITLE=""
+ePUB_TITLE=""
 
 # Language code (ko, en, ja, zh, ru, etc.)
-EPUB_LANG=""
+ePUB_LANG=""
 
 # Disable natural sorting of input files
 DO_NOT_SORT_PARAMS=""
@@ -111,7 +111,7 @@ DO_NOT_SORT_PARAMS=""
 # Suppress progress messages
 QUIET=""
 
-# Extract mode: split merged EPUB back to original files
+# Extract mode: split merged ePUB back to original files
 EXTRACT_MODE=""
 
 # Called when program exits
@@ -174,9 +174,9 @@ debug_var() {
 parse_opts() {
 	while getopts "n:t:l:s:p:Oqx" opt; do
 		case "$opt" in
-			n) EPUB_NAME="$OPTARG" ;;             # filename
-			t) EPUB_TITLE="$OPTARG" ;;            # title
-			l) EPUB_LANG="$OPTARG" ;;             # lang
+			n) ePUB_NAME="$OPTARG" ;;             # filename
+			t) ePUB_TITLE="$OPTARG" ;;            # title
+			l) ePUB_LANG="$OPTARG" ;;             # lang
 			p) TOC_VOLUME_PREFIX="$OPTARG"; \
 				TOC_VOLUME_LABELS_GIVEN=1 ;;  # volume prefix
 			s) TOC_VOLUME_SUFFIX="$OPTARG";
@@ -193,8 +193,8 @@ parse_opts() {
 	readonly EXTRACT_MODE
 
 	if [ -n "$DEBUG" ]; then
-		debug "EPUB_NAME=$EPUB_NAME"
-		debug "EPUB_LANG=$EPUB_LANG"
+		debug "ePUB_NAME=$ePUB_NAME"
+		debug "ePUB_LANG=$ePUB_LANG"
 		debug "TOC_VOLUME_PREFIX=$TOC_VOLUME_PREFIX"
 		debug "TOC_VOLUME_SUFFIX=$TOC_VOLUME_SUFFIX"
 		debug "DO_NOT_SORT_PARAMS=$DO_NOT_SORT_PARAMS"
@@ -239,7 +239,7 @@ validate_arguments() {
 	done
 }
 
-# Validate EPUB file structure
+# Validate ePUB file structure
 #
 # Args: epub file
 # Ref: $EXTRACT_MODE
@@ -306,59 +306,59 @@ get_common_prefix() {
 	echo "$common" | sed -e 's/[-_[( ]*$//' -e 's/ [0-9][0-9]*$//'
 }
 
-# Determine output epub filename and title from common prefix and $EPUB_NAME
+# Determine output epub filename and title from common prefix and $ePUB_NAME
 #
 # Args: filename 1, filename 2
-# Ref: $EPUB_NAME, $EPUB_NAME, file
-# Set: $EPUB_NAME, $EPUB_NAME
+# Ref: $ePUB_NAME, $ePUB_NAME, file
+# Set: $ePUB_NAME, $ePUB_NAME
 generate_filename_and_title() {
-	if [[ -z "$EPUB_NAME" ]]; then
+	if [[ -z "$ePUB_NAME" ]]; then
 		base1="$(basename "$1")"
 		base2="$(basename "$2")"
-		EPUB_NAME="$(get_common_prefix "$base1" "$base2")"
+		ePUB_NAME="$(get_common_prefix "$base1" "$base2")"
 	fi
 
-	if [[ -z "$EPUB_NAME" ]]; then
+	if [[ -z "$ePUB_NAME" ]]; then
 		error_message="Cannot determine output name from '$1' and '$2'."
 		error_message+=$'\n'
 		error_message+="Please give \`-n' option"
 		error "$error_message"
 	fi
 
-	if [[ -f "$EPUB_NAME.epub" ]]; then
-		error "Output file already exists: $EPUB_NAME.epub"
+	if [[ -f "$ePUB_NAME.epub" ]]; then
+		error "Output file already exists: $ePUB_NAME.epub"
 	fi
 
-	EPUB_TITLE="${EPUB_TITLE:-$EPUB_NAME}"
+	ePUB_TITLE="${ePUB_TITLE:-$ePUB_NAME}"
 }
 
 # Sort files naturally unless disabled
 #
 # Args: file1, file2, ...
 # Ref: $DO_NOT_SORT_PARAMS
-# Set: $EPUB_FILES
+# Set: $ePUB_FILES
 sort_input_files() {
 	if [[ -n "${DO_NOT_SORT_PARAMS:-}" ]]; then
-		EPUB_FILES=("$@")
+		ePUB_FILES=("$@")
 	else
 		local sorted_files=()
 		while IFS= read -r -d '' file; do
 			sorted_files+=("$file")
 		done < <(printf "%s\0" "$@" | sort -zV)
-		EPUB_FILES=("${sorted_files[@]}")
+		ePUB_FILES=("${sorted_files[@]}")
 	fi
 }
 
-# Extract all EPUB files
+# Extract all ePUB files
 #
-# Ref: $EPUB_FILES(), $TEMP_DIR
+# Ref: $ePUB_FILES(), $TEMP_DIR
 # Set: file
 extract_epubs() {
-	for i in "${!EPUB_FILES[@]}"; do
-		log "Extracting ${EPUB_FILES[i]}"
+	for i in "${!ePUB_FILES[@]}"; do
+		log "Extracting ${ePUB_FILES[i]}"
 		mkdir -p "$TEMP_DIR/$i"
-		unzip -q "${EPUB_FILES[i]}" -d "$TEMP_DIR/$i" \
-			|| error "Failed to extract: ${EPUB_FILES[i]}"
+		unzip -q "${ePUB_FILES[i]}" -d "$TEMP_DIR/$i" \
+			|| error "Failed to extract: ${ePUB_FILES[i]}"
 	done
 }
 
@@ -401,24 +401,24 @@ detect_language() {
 	fi
 }
 
-# Make paths arrays (OPF_FILES, NCX_FILES) of input EPUBs
+# Make paths arrays (OPF_FILES, NCX_FILES) of input ePUBs
 #
-# Ref: $EPUB_FILES, file
+# Ref: $ePUB_FILES, file
 # Set: $FIRST_NCX_ID, $NCX_FILES, $OPF_FILES
 get_opf_ncx_array() {
-	for i in "${!EPUB_FILES[@]}"; do
+	for i in "${!ePUB_FILES[@]}"; do
 		# "$i"/* hides hidden dir in $i
 		cur_opf="$(find "$i" -not -path "*/.*" -name "*.opf" | head -1)"
 
 		[[ -n "$cur_opf" ]] \
-			|| error "No OPF file found in ${EPUB_FILES[i]}"
+			|| error "No OPF file found in ${ePUB_FILES[i]}"
 
 		OPF_FILES[i]="$cur_opf"
 
 		cur_ncx="$(find "$i" -not -path "*/.*" -name "*.ncx" | head -1)"
 
 		[[ -n "$cur_ncx" ]] \
-			|| error "No NCX file found in ${EPUB_FILES[i]}"
+			|| error "No NCX file found in ${ePUB_FILES[i]}"
 
 		NCX_FILES[i]="$cur_ncx"
 	done
@@ -432,11 +432,11 @@ get_opf_ncx_array() {
 
 # Detect volume prefix and suffix based on language
 #
-# Ref: $EPUB_LANG, $TOC_VOLUME_LABELS_GIVEN, $TOC_VOLUME_PREFIX, 
+# Ref: $ePUB_LANG, $TOC_VOLUME_LABELS_GIVEN, $TOC_VOLUME_PREFIX, 
 #      $TOC_VOLUME_SUFFIX
 # Set: $TOC_VOLUME_PREFIX, $TOC_VOLUME_SUFFIX
 detect_volume_labels() {
-	local lang="$EPUB_LANG"
+	local lang="$ePUB_LANG"
 	local prefix="$TOC_VOLUME_PREFIX"
 	local suffix="$TOC_VOLUME_SUFFIX"
 
@@ -471,7 +471,7 @@ detect_volume_labels() {
 	TOC_VOLUME_SUFFIX="$suffix"
 }
 
-# Setup base structure from first EPUB
+# Setup base structure from first ePUB
 #
 # Ref: file
 # Set: file
@@ -514,7 +514,7 @@ find_file() {
 
 # Generate table of contents
 #
-# Ref: $NCX_FILES, $EPUB_FILES, $TOC_VOLUME_PREFIX, $TOC_VOLUME_SUFFIX
+# Ref: $NCX_FILES, $ePUB_FILES, $TOC_VOLUME_PREFIX, $TOC_VOLUME_SUFFIX
 # Set: file
 generate_ncx() {
 	detect_volume_labels
@@ -526,7 +526,7 @@ generate_ncx() {
 	sed '/<navMap>/q' "${NCX_FILES[0]}" > "toc.ncx"
 
 	# Process each volume
-	for i in "${!EPUB_FILES[@]}"; do
+	for i in "${!ePUB_FILES[@]}"; do
 		local cur_ncx cur_ncx_dir volume_num
 
 		cur_ncx="${NCX_FILES[i]}"
@@ -590,7 +590,7 @@ fix_play_order() {
 
 # Generate OPF manifest and spine
 #
-# Ref: $OPF_FILES, $EPUB_FILES, $EPUB_NAME
+# Ref: $OPF_FILES, $ePUB_FILES, $ePUB_NAME
 # Set: file
 generate_opf() {
 	local manifest_file="content.opf.manifest"
@@ -598,7 +598,7 @@ generate_opf() {
 
 	# Initialize OPF with header
 
-	sed -e "s|<dc:title>.*</dc:title>|<dc:title>$EPUB_NAME</dc:title>|" \
+	sed -e "s|<dc:title>.*</dc:title>|<dc:title>$ePUB_NAME</dc:title>|" \
 		-e "s|<meta[^>]*over.*content=[\"'][^\"']*|&-0|" \
 		-e '/<manifest>/q' "${OPF_FILES[0]}" \
 		| grep -v 'calibre:series' \
@@ -606,7 +606,7 @@ generate_opf() {
 		> "content.opf"
 
 	# Process each volume for manifest and spine
-	for i in "${!EPUB_FILES[@]}"; do
+	for i in "${!ePUB_FILES[@]}"; do
 		cur_opf="${OPF_FILES[i]}"
 		cur_opf_dir="$(dirname "$cur_opf")"
 
@@ -650,7 +650,7 @@ generate_opf() {
 #
 # In: path content
 # Out: modified path content
-fix_ttf_path_in_extracted_opf() {
+fix_ttf_path() {
         sed -E 's#href=["'"'"'].*/[^"'"'"']*/([^/]+\.(ttf|otf))["'"'"']#href="fonts/\1"#gi'
 }
 
@@ -668,12 +668,12 @@ encode_nfc(){
 
 # For epub-split, save current OPF and NCX to .epub-merge/
 #
-# Ref: $EPUB_FILES, $OPF_FILES, $NCX_FILES
+# Ref: $ePUB_FILES, $OPF_FILES, $NCX_FILES
 # Set: file
 backup_for_splitting() {
 	mkdir .epub-merge
 
-	for i in "${!EPUB_FILES[@]}"; do
+	for i in "${!ePUB_FILES[@]}"; do
 		local cur_opf="${OPF_FILES[i]}"
 		local cur_opf_dir
 		cur_opf_dir="$(dirname "$cur_opf")"
@@ -682,10 +682,12 @@ backup_for_splitting() {
 		local cur_ncx_dir
 		cur_ncx_dir="$(dirname "$cur_ncx")"
 
-		local split_ncx_dir
-		split_ncx_dir="$(echo "$cur_ncx_dir/" | sed -e "s:^$i/::" -e "s://:/:" -e "s:^$:.:")"
-		local split_opf_dir
-		split_opf_dir="$(echo "$cur_opf_dir/" | sed -e "s:^$i/::" -e "s://:/:" -e "s:^$:.:")"
+		local new_ncx_dir
+		new_ncx_dir="$(echo "$cur_ncx_dir/" \
+			| sed -e "s:^$i/::" -e "s://:/:" -e "s:^$:.:")"
+		local new_opf_dir
+		new_opf_dir="$(echo "$cur_opf_dir/" \
+			| sed -e "s:^$i/::" -e "s://:/:" -e "s:^$:.:")"
 
 		# Extract current NCX manifest ID from first OPF
 		local cur_ncx_id
@@ -697,23 +699,23 @@ backup_for_splitting() {
 			continue
 		fi
 
-		sed -e "s:href=[\"']:&$split_opf_dir/:g" \
+		sed -e "s:href=[\"']:&$new_opf_dir/:g" \
 			-e "s:'\./:':g" \
 			-e "s:\"\./:\":g" \
 			-e "s:href=[\"'][^'\"]*\.ncx['\"]:href=\"toc.ncx\":" \
 			-e "s:\(href=.*\)\(//\):\1/:" \
 			-e "s:[\"']${cur_ncx_id}['\"]:\"ncx\":" "$cur_opf" \
-			| fix_ttf_path_in_extracted_opf | tr -d '\r' \
+			| fix_ttf_path | tr -d '\r' \
 			> .epub-merge/"$i".opf
 
 		# Transform: old_path -> from_new_ncx_to_old_ncx/old_path
-		sed -e "s:src=[\"']:&$split_ncx_dir/:" \
+		sed -e "s:src=[\"']:&$new_ncx_dir/:" \
 				-e "s:'\./:':g" \
 				-e "s:\(src=.*\)\(//\):\1/:" \
 				-e "s:\"\./:\":g" "$cur_ncx" \
 			> .epub-merge/"$i".ncx
 
-		basename "${EPUB_FILES[i]}" > .epub-merge/"$i".name
+		basename "${ePUB_FILES[i]}" > .epub-merge/"$i".name
 		encode_nfc .epub-merge/"$i".name
 	done
 }
@@ -780,7 +782,7 @@ path_to_trunk() {
         fi
 }
 
-# Update font paths in CSS files while merging EPUBs
+# Update font paths in CSS files while merging ePUBs
 #
 # Set: file
 update_css_font_urls() {
@@ -804,7 +806,7 @@ update_css_font_urls() {
 #
 # In: path content
 # Out: modified path content
-fix_0_ttf_path_in_opf() {
+fix_css_0_ttf_path() {
 	sed -E 's#href=["'"'"']0/[^"'"'"']*/([^/]+\.(ttf|otf))["'"'"']#href="fonts/\1"#gi'
 }
 
@@ -819,7 +821,7 @@ finalize_metadata() {
 
 	# Update OPF with new UUID and clean paths
 	cat content.opf | tr -d '\r' \
-		| fix_0_ttf_path_in_opf \
+		| fix_css_0_ttf_path \
 	        | grep -vi '[0-9][0-9]*/.*\.ttf' \
 	        | grep -vi '[0-9][0-9]*/.*\.otf' \
 	        | sed -e "s/$uuid_pattern/$uuid/g" \
@@ -836,32 +838,32 @@ finalize_metadata() {
 		| tr -d '\r' > "toc.ncx.tmp" && mv "toc.ncx.tmp" "toc.ncx"
 }
 
-# Create final EPUB file
+# Create final ePUB file
 #
-# Ref: $EPUB_NAME, $START_DIR
+# Ref: $ePUB_NAME, $START_DIR
 # Set: file
 create_epub() {
-	local output_file="$EPUB_NAME.epub"
+	local output_file="$ePUB_NAME.epub"
 
-	# Package EPUB with proper compression
+	# Package ePUB with proper compression
 	zip -q -0 -X "$output_file" mimetype
 	zip -q -r "$output_file" . -x mimetype
 
-	# Move EPUB to start directory
+	# Move ePUB to start directory
 	mv "$output_file" "$START_DIR/"
 
 	log "$output_file: successfully created"
 }
 
-# Extract merged EPUB
+# Extract merged ePUB
 #
 # FIXME: refactor me
 #
 # Args: merged epub
 # Ref: $START_DIR, $TEMP_DIR
 # Set: file
-extract_merged_epub() {
-	debug "Validate a merged-EPUB file"
+split_merged_epub() {
+	debug "Validate a merged-ePUB file"
 	validate_epub "$1"
 
 	# `mktemp` should be done before extracting args
@@ -932,8 +934,8 @@ main() {
 	validate_arguments "$@"
 
 	if [[ -n "$EXTRACT_MODE" ]]; then
-		debug "Validate a merged-EPUB file"
-		extract_merged_epub "$1"
+		debug "Validate a merged-ePUB file"
+		split_merged_epub "$1"
 
 		exit
 	fi
@@ -941,21 +943,21 @@ main() {
 	debug "Determine output filename"
 	generate_filename_and_title "$1" "$2"
 
-	debug "Validate all EPUB files"
+	debug "Validate all ePUB files"
 	for epub in "$@"; do
 		validate_epub "$epub"
 	done
 
-	debug "Sort input files and save them to EPUB_FILES"
+	debug "Sort input files and save them to ePUB_FILES"
 	sort_input_files "$@"
 
-	debug "Generating merged EPUB..."
+	debug "Generating merged ePUB..."
 
 	debug "Create temporary directory"
 	TEMP_DIR="$(mktemp -d)"
 
 	# `mktemp` should be done before extracting args
-	debug "Extract all EPUBs to 0/, 1/, 2/, ..."
+	debug "Extract all ePUBs to 0/, 1/, 2/, ..."
 	extract_epubs
 
 	# `cd` should be done after extracting args
@@ -969,8 +971,8 @@ main() {
 	setup_base_structure
 
 	debug 'Detect language'
-	EPUB_LANG="$(detect_language "${OPF_FILES[0]}" "$EPUB_LANG")"
-	readonly EPUB_LANG
+	ePUB_LANG="$(detect_language "${OPF_FILES[0]}" "$ePUB_LANG")"
+	readonly ePUB_LANG
 
 	debug 'Generate NCX and OPF'
 	generate_ncx
@@ -985,7 +987,7 @@ main() {
 	debug "Finalize metadata"
 	finalize_metadata
 
-	debug "Create final EPUB"
+	debug "Create final ePUB"
 	create_epub
 }
 
