@@ -61,8 +61,7 @@ readonly START_DIR
 # If set 1, print debug message
 readonly DEBUG=${DEBUG:-}
 
-# If this variable is set, the content.opf of the merged ePUB and the filenames
-# of the split ePUBs
+# Converts from UTF-8-MAC to UTF-8 for merged content.opf and split filenames
 ICONV_HAS_UTF_8_MAC="$(iconv -l | grep "UTF-8-MAC" || true)"
 readonly ICONV_HAS_UTF_8_MAC
 
