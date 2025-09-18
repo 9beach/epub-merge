@@ -1,31 +1,12 @@
 #!/bin/bash
 
+EPUB_MERGE_DIR="$(realpath "$(dirname "$0")/..")"
+
+export EPUB_MERGE_TEST=1
+source "$EPUB_MERGE_DIR/epub-merge"
+
 # shellcheck disable=SC1091
-source "$(dirname "$0")/assert.sh"
-
-path_to_trunk() {
-        local parent
-        parent="$(dirname "$(dirname "$1" | sed -e 's:^\./::')")"
-
-        if [ "$parent" = "." ]; then
-                echo ""
-        else
-		# shellcheck disable=SC2001
-                echo "$parent/" | sed 's#[^/][^/]*#..#g'
-        fi
-}
-
-path_to_root() {
-        local parent
-        parent="$(dirname "$1" | sed -e 's:^\./::')"
-
-        if [ "$parent" = "." ]; then
-                echo "."
-        else
-		# shellcheck disable=SC2001
-                echo "$parent" | sed 's#[^/][^/]*#..#g'
-        fi
-}
+source "$EPUB_MERGE_DIR/tests/assert.sh"
 
 assert_eq "$(path_to_root "a/b/c.txt")" "../.."
 
@@ -33,8 +14,9 @@ assert_eq "$(path_to_trunk "a/b/c.txt")" "../"
 assert_eq "$(path_to_trunk "a/bb/ccc/dddd/eeee.txt")" "../../../"
 assert_eq "$(path_to_trunk "a/b")" ""
 
-# Not ideal, but we assume $i is always within a trunk and the 
-# path is always normalized
+# Not ideal, but we assume $i is always within a trunk and the path is always 
+# normalized and relative
+assert_eq "$(path_to_trunk "//.//c/b/c.txt")" "//..//../"
 assert_eq "$(path_to_trunk "a")" ""
 assert_eq "$(path_to_trunk "../b/c.txt")" "../"
 

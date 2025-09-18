@@ -6,7 +6,7 @@ if [ $# -lt 2 ]; then
 fi
 
 set -euo pipefail
-trap 'echo "EPUB-DIFF Error at line $LINENO" >&2; cleanup' ERR INT TERM
+trap 'echo "epub-diff error: at line $LINENO" >&2; cleanup' ERR INT TERM
 
 cleanup() {
 	[ -n "${TEMP_DIR:-}" ] && rm -rf "$TEMP_DIR"
