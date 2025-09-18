@@ -16,16 +16,19 @@ trap cleanup EXIT
 
 if [[ $AUTHOR_LOCAL_ENV == 1 ]]; then
 	# WARNING: Local use only - do not run elsewhere
-	SOURCE_DIR="/Volumes/Norway/Backup/Test/epub-test"
+	SAMPLE_DIR="/Volumes/Norway/Backup/Test/epub-test"
 	TARGET_DIR="$HOME/Test/epub-test"
 else
-	SOURCE_DIR="$(dirname "$0")/samples"
+	SAMPLE_DIR="$(realpath "$(dirname "$0")/samples")"
 	TARGET_DIR="$(mktemp -d)"
 fi
 
 epub_diff() {
-	local source_dir="${SOURCE_DIR:-/default/path}"
-	"${source_dir}/../epub-diff.sh" "$@"
+	"${SAMPLE_DIR}/../epub-diff.sh" "$@"
+}
+
+epub_merge() {
+	"${SAMPLE_DIR}/../../epub-merge" "$@"
 }
 
 ARG=""
@@ -80,7 +83,7 @@ tcd() {
 
 	mkdir -p "$TARGET_DIR"
 	rsync -a --delete --exclude .merged --exclude .splitted-merged \
-		--exclude .splitted "$SOURCE_DIR/" "$TARGET_DIR"
+		--exclude .splitted "$SAMPLE_DIR/" "$TARGET_DIR"
 )
 
 (
@@ -88,7 +91,7 @@ tcd() {
 	echo ++ Test unit: merge
 
 	ls ../merged | sed -e 's/.epub//' | while read -r line; do
-		epub-merge -q ../original/"$line"*.epub
+		epub_merge -q ../original/"$line"*.epub
 	done
 
 	cd ../merged
@@ -102,7 +105,7 @@ tcd() {
 	echo ++ Test unit: split
 
 	for i in ../.merged/*; do
-		epub-merge -q -x "$i"
+		epub_merge -q -x "$i"
 	done
 
 	cd ../splitted
@@ -116,7 +119,7 @@ tcd() {
 	echo ++ Test unit: merge-splitted
 
 	ls ../merged | sed -e 's/.epub//' | while read -r line; do
-		epub-merge -q ../splitted/"$line"*.epub
+		epub_merge -q ../splitted/"$line"*.epub
 	done
 
 	cd ../merged
