@@ -47,9 +47,9 @@ fi
 
 case "$ARG" in
 	clean)
-		rm -rf "$TARGET_DIR/.merged/" \
-			"$TARGET_DIR/.splitted/" \
-			"$TARGET_DIR/.splitted-merged/"
+		rm -rf "${TARGET_DIR:?}/.merged/" \
+			"${TARGET_DIR:?}/.splitted/" \
+			"${TARGET_DIR:?}/.splitted-merged/"
 		;;
 	merge)
 		rm -rf "$TARGET_DIR/.merge/"
@@ -74,13 +74,13 @@ fi
 
 tcd() {
 	[[ -d "$TARGET_DIR/$1" ]] && exit
-	rm -rf "$TARGET_DIR/$1"
+	rm -rf "${TARGET_DIR:?}/$1"
 	mkdir -p "$TARGET_DIR/$1"
 	cd "$TARGET_DIR/$1"
 }
 
 (
-	[[ -d "$TARGET_DIR/merged" ]] && exit
+	tcd .synced
 	echo ++ Test unit: setup
 
 	mkdir -p "$TARGET_DIR"
@@ -92,6 +92,7 @@ tcd() {
 	tcd .merged
 	echo ++ Test unit: merge
 
+	# shellcheck disable=SC2012
 	ls ../merged | sed -e 's/.epub//' | while read -r line; do
 		epub_merge -q "../original/$line"*.epub
 	done
@@ -120,6 +121,7 @@ tcd() {
 	tcd .splitted-merged
 	echo ++ Test unit: merge-splitted
 
+	# shellcheck disable=SC2012
 	ls ../merged | sed -e 's/.epub//' | while read -r line; do
 		epub_merge -q ../splitted/"$line"*.epub
 	done

@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# shellcheck disable=SC1091
 source "$(dirname "$0")/assert.sh"
 
 path_to_trunk() {
@@ -9,6 +10,7 @@ path_to_trunk() {
         if [ "$parent" = "." ]; then
                 echo ""
         else
+		# shellcheck disable=SC2001
                 echo "$parent/" | sed 's#[^/][^/]*#..#g'
         fi
 }
@@ -20,6 +22,7 @@ path_to_root() {
         if [ "$parent" = "." ]; then
                 echo "."
         else
+		# shellcheck disable=SC2001
                 echo "$parent" | sed 's#[^/][^/]*#..#g'
         fi
 }
