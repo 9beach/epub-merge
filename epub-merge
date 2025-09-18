@@ -62,7 +62,7 @@ readonly DEBUG=${DEBUG:-}
 
 # If this variable is set, the content.opf of the merged ePUB and the filenames
 # of the split ePUBs
-ICONV_HAS_UTF_8_MAC="$(iconv -l | grep "UTF-8-MAC")"
+ICONV_HAS_UTF_8_MAC="$(iconv -l | grep "UTF-8-MAC" || true)"
 readonly ICONV_HAS_UTF_8_MAC
 
 # Capital letter variables below: null initially, set once at startup, 
@@ -479,7 +479,7 @@ setup_base_structure() {
 	local first_extract="0"
 
 	# Copy base files
-	cp -r "$first_extract/META-INF" "$first_extract/mimetype" ""
+	cp -r "$first_extract/META-INF" "$first_extract/mimetype" "."
 
 	# Update container.xml to point to our new OPF
 	if [[ -f "META-INF/container.xml" ]]; then
