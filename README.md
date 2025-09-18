@@ -65,10 +65,10 @@ SYNOPSIS
 
 OPTIONS
      -n name        Custom output filename (without extension)
+     -t title        Custom ePUB title
      -l lang        Language code (ko, en, ja, zh, ru, etc.)
      -p prefix      Prefix for TOC volume labels
      -s suffix      Suffix for TOC volume labels
-     -S             Disable automatic suffix assignment for TOC volumes
      -O             Disable natural sorting of input files
      -q             Suppress progress messages
      -x             Extract mode: split merged EPUB back to original files

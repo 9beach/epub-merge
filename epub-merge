@@ -173,7 +173,7 @@ debug_var() {
 # Ref: $@, many variables
 # Set: many variables
 parse_opts() {
-	while getopts "n:t:l:s:p:Oqx" opt; do
+	while getopts "n:t:l:p:s:Oqx" opt; do
 		case "$opt" in
 			n) EPUB_NAME="$OPTARG" ;;             # filename
 			t) EPUB_TITLE="$OPTARG" ;;            # title
