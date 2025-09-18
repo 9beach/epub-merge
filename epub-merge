@@ -192,6 +192,7 @@ parse_opts() {
 	readonly DO_NOT_SORT_PARAMS
 	readonly QUIET
 	readonly EXTRACT_MODE
+	readonly TOC_VOLUME_LABELS_GIVEN
 
 	if [ -n "$DEBUG" ]; then
 		debug "EPUB_NAME=$EPUB_NAME"
