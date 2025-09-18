@@ -1,15 +1,15 @@
 #!/bin/bash
 
 set -euo pipefail
-trap 'echo "Error at line $LINENO" >&2' ERR INT TERM
+trap 'echo "Error (epub-merge): at line $LINENO" >&2' ERR INT TERM
 
 readonly AUTHOR_LOCAL_ENV=${AUTHOR_LOCAL_ENV:-0}
 TARGET_DIR=""
+TEMP_DIR=""
 
 cleanup() {
-        if [[ "$AUTHOR_LOCAL_ENV" == 0 && -n "$TARGET_DIR" ]]; then
-                rm -fr "$TARGET_DIR"
-        fi
+	[[ -n "$TEMP_DIR" ]] && rm -fr "$TEMP_DIR"
+	true
 }
 
 trap cleanup EXIT
@@ -22,7 +22,8 @@ if [[ $AUTHOR_LOCAL_ENV == 1 ]]; then
 	TARGET_DIR="$HOME/Test/epub-test"
 else
 	SAMPLE_DIR="$(realpath "$(dirname "$0")/samples")"
-	TARGET_DIR="$(mktemp -d)"
+	TEMP_DIR="$(mktemp -d)"
+	TARGET_DIR="$TEMP_DIR"
 fi
 
 epub_diff() {
@@ -129,4 +130,4 @@ tcd() {
 	done
 )
 
-echo "++ All done"
+echo "++ All done" || true

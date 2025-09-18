@@ -5,9 +5,6 @@
 
 set -euo pipefail
 
-# Register error handler for ERR, INT, and TERM signals
-trap 'echo "Error at line $LINENO" >&2; cleanup' ERR INT TERM
-
 # Display usage information
 show_usage() {
 	cat >&2 << 'EOF'
@@ -52,6 +49,10 @@ EXAMPLES
           One Thousand and One Nights.epub: successfully created
 EOF
 }
+
+# Register error handler for ERR, INT, and TERM signals
+trap 'printf "\033[31mError (epub-merge): at line $LINENO\033[0m\n" >&2; \
+	cleanup' ERR INT TERM
 
 # Extract input ePUBs here
 START_DIR="$(pwd)"
@@ -134,7 +135,7 @@ trap cleanup EXIT
 #
 # Args: message
 error() {
-	printf "\033[31mError: %s\033[0m\n" "$*" >&2
+	printf "\033[31mError (epub-merge): %s\033[0m\n" "$*" >&2
 	exit 1
 }
 
@@ -215,7 +216,7 @@ check_dependencies() {
 	done
 
 	if [[ ${#missing_deps[@]} -gt 0 ]]; then
-		error "Missing required commands: ${missing_deps[*]}"
+		error "Missing required commands '${missing_deps[*]}'"
 	fi
 }
 
@@ -235,7 +236,7 @@ validate_arguments() {
 	fi
 
 	for file in "$@"; do
-		[[ -f "$file" ]] || error "File not found: $file"
+		[[ -f "$file" ]] || error "File not found '$file'"
 	done
 }
 
@@ -269,11 +270,11 @@ validate_epub() {
 
 	ZIP_CONTENT_PATH="$(mktemp)"
 	unzip -l "$epub_file" 2>/dev/null > "$ZIP_CONTENT_PATH" \
-		|| error "Invalid ZIP file: $epub_file"
+		|| error "Invalid ZIP file '$epub_file'"
 
 	for pattern in "${required_files[@]}"; do
 		if ! cat "$ZIP_CONTENT_PATH" | grep -qx ".*$pattern$"; then
-			error "Missing required file '$pattern' in: $epub_file"
+			error "Missing required file '$pattern' in '$epub_file'"
 		fi
 	done
 }
@@ -326,7 +327,7 @@ generate_filename_and_title() {
 	fi
 
 	if [[ -f "$ePUB_NAME.epub" ]]; then
-		error "Output file already exists: $ePUB_NAME.epub"
+		error "Output file already exists '$ePUB_NAME.epub'"
 	fi
 
 	ePUB_TITLE="${ePUB_TITLE:-$ePUB_NAME}"
@@ -358,7 +359,7 @@ extract_epubs() {
 		log "Extracting ${ePUB_FILES[i]}"
 		mkdir -p "$TEMP_DIR/$i"
 		unzip -q "${ePUB_FILES[i]}" -d "$TEMP_DIR/$i" \
-			|| error "Failed to extract: ${ePUB_FILES[i]}"
+			|| error "Failed to extract '${ePUB_FILES[i]}'"
 	done
 }
 
