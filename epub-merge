@@ -767,10 +767,11 @@ path_to_root() {
 #   a/b/c.txt -> "../"
 #   a/b.txt   -> ""
 #
-#   # Not ideal, but we assume $i is always within a trunk and the path is 
+#   # Not ideal, but we assume $1 is always within a trunk and the path is 
 #   # always normalized and relative
 #   a.txt -> ""
-#   ../../a.txt -> ".."
+#   a/b/c.txt -> "../"
+#   ../../a.txt -> "../"
 #
 # Args: filepath
 # Out: modified path

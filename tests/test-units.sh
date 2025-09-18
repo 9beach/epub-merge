@@ -8,13 +8,12 @@ source "$EPUB_MERGE_DIR/epub-merge"
 # shellcheck disable=SC1091
 source "$EPUB_MERGE_DIR/tests/assert.sh"
 
+assert_eq "$(path_to_trunk "a/b")" ""
 assert_eq "$(path_to_root "a/b/c.txt")" "../.."
-
 assert_eq "$(path_to_trunk "a/b/c.txt")" "../"
 assert_eq "$(path_to_trunk "a/bb/ccc/dddd/eeee.txt")" "../../../"
-assert_eq "$(path_to_trunk "a/b")" ""
 
-# Not ideal, but we assume $i is always within a trunk and the path is always 
+# Not ideal, but we assume $1 is always within a trunk and the path is always 
 # normalized and relative
 assert_eq "$(path_to_trunk "//.//c/b/c.txt")" "//..//../"
 assert_eq "$(path_to_trunk "a")" ""
