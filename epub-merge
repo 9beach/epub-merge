@@ -841,10 +841,17 @@ finalize_metadata() {
 
 # Create final ePUB file
 #
-# Ref: $EPUB_NAME, $START_DIR
+# In: zip dir, ePUB basename (not path including dir)
+# Ref: file
 # Set: file
 create_epub() {
-	local output_file="$EPUB_NAME.epub"
+	local working_dir="$1"
+	local output_file="$2"
+
+	debug_var working_dir
+	debug_var output_file
+
+	cd "$working_dir" > /dev/null
 
 	# Package ePUB with proper compression
 	zip -q -0 -X "$output_file" mimetype
@@ -854,6 +861,8 @@ create_epub() {
 	mv "$output_file" "$START_DIR/"
 
 	log "$output_file: successfully created"
+
+	cd - > /dev/null
 }
 
 # Extract merged ePUB
@@ -874,7 +883,7 @@ split_merged_epub() {
 	unzip -q "$1" -d "$TEMP_DIR"
 
 	# `cd` should be done after extracting args
-	cd "$TEMP_DIR"
+	cd "$TEMP_DIR" > /dev/null
 
 	local count
 	count="$(ls .epub-merge/[0-9]*.opf 2>/dev/null | wc -l)"
@@ -909,15 +918,7 @@ split_merged_epub() {
 		cp .epub-merge/"$i".opf "$i"/content.opf
 		cp .epub-merge/"$i".ncx "$i"/toc.ncx
 
-		cd "$i"
-
-		zip -q -0 -X "$cur_epub" mimetype
-		zip -q -r "$cur_epub" . -x mimetype
-
-		mv -i "$cur_epub" "$START_DIR" \
-			&& log "$cur_epub: successfully created"
-
-		cd ..
+		create_epub "$i/" "$cur_epub"
 	done
 }
 
@@ -963,7 +964,7 @@ main() {
 
 	# `cd` should be done after extracting args
 	debug "Now, we move to working directory"
-	cd "$TEMP_DIR"
+	cd "$TEMP_DIR" > /dev/null
 
 	debug "Get paths lists (OPF_FILES, NCX_FILES)"
 	get_opf_ncx_array
@@ -989,7 +990,7 @@ main() {
 	finalize_metadata
 
 	debug "Create final ePUB"
-	create_epub
+	create_epub "." "$EPUB_NAME.epub"
 }
 
 # Run main function with all arguments
