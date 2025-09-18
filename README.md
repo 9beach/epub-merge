@@ -75,9 +75,9 @@ OPTIONS
 
 EXAMPLES
      epub-merge love-10.epub love-8.epub love-9.epub
-          extracting love-10.epub
           extracting love-8.epub
           extracting love-9.epub
+          extracting love-10.epub
           love.epub: successfully created
 
      epub-merge -x love.epub
