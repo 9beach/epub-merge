@@ -142,7 +142,7 @@ QUIET=""
 # Extract mode: split merged ePUB back to original files
 EXTRACT_MODE=""
 
-# Print red message and exit
+# Print red error message and exit
 #
 # Args: message
 error() {
@@ -160,7 +160,7 @@ log() {
 	fi
 }
 
-# Print gray log message if `-q' option not given 
+# Print orange log message if `-q' option not given 
 #
 # Args: message
 # Ref: $QUIET
@@ -170,7 +170,7 @@ orange_log() {
 	fi
 }
 
-# Print gray debug message if DEBUG variabloe not set 
+# Print gray debug message if DEBUG variables not set 
 #
 # Args: message
 # Ref: $DEBUG
@@ -575,7 +575,8 @@ generate_ncx() {
 
 		# Add volume link
 		grep -m 1 '<content src=' "$cur_ncx" \
-			| sed "s|src=\"|&$cur_ncx_dir/|" >> "toc.ncx"
+			| sed "s|src=\"|&$cur_ncx_dir/|" \
+			>> "toc.ncx"
 
 		# Merge navigation points
 		sed 's/<\/*navMap[^>]*>/\n<navMap>\n/;' "$cur_ncx" \
@@ -819,7 +820,7 @@ path_to_trunk() {
 }
 
 # Update font paths in CSS files while splitting ePUB
-# The CSSs in splitted ePUBs are moved from [0-9][0-9]*/a/b.css to a/b.css
+# The CSS files in splitted ePUBs are moved from [0-9][0-9]*/a/b.css to a/b.css
 #
 # Example:
 #   url(1/b/c.ttf) -> url(../fonts/c.ttf)
@@ -841,7 +842,7 @@ update_css_font_urls_for_splitting() {
 }
 
 # Update font paths in CSS files while merging ePUBs
-# The CSSs in merged ePUB are moved from a/b.css to [0-9][0-9]*/a/b.css
+# The CSS files in merged ePUB are moved from a/b.css to [0-9][0-9]*/a/b.css
 #
 # Example:
 #   url(a/b.ttf) -> url(../../fonts/c.ttf)
