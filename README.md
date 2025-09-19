@@ -56,22 +56,25 @@ sudo chmod a+rx /usr/local/bin/epub-merge
 
 ```
 NAME
-     epub-merge - combines multiple EPUB files into a single volume, or 
-     extracts merged EPUB files
+     epub-merge - combines multiple ePUB files into a single volume, or
+     extracts merged ePUB
 
 SYNOPSIS
      epub-merge [OPTIONS] epub1 epub2 [epub3 ...]
-     epub-merge -x merged-epub.epub
+     epub-merge -x merged-epup
 
 OPTIONS
-     -n name        Custom output filename (without extension)
-     -t title        Custom ePUB title
-     -l lang        Language code (ko, en, ja, zh, ru, etc.)
-     -p prefix      Prefix for TOC volume labels
-     -s suffix      Suffix for TOC volume labels
+     -d directory   Output directory for the generated ePUB 
+                    (default: current directory)
+     -f             Overwrite existing ePUB files with the same name
+     -l lang        Specify language code (ko, en, ja, zh, ru, etc.)
+     -n name        Set custom output filename (without extension)
      -O             Disable natural sorting of input files
+     -p prefix      Add prefix to TOC volume labels
      -q             Suppress progress messages
-     -x             Extract mode: split merged EPUB back to original files
+     -s suffix      Add suffix to TOC volume labels
+     -t name        Set custom title
+     -x             Extraction mode: split merged ePUB back into original files
 
 EXAMPLES
      epub-merge love-10.epub love-8.epub love-9.epub

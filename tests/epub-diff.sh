@@ -17,7 +17,9 @@ trap cleanup EXIT
 grep-v-uuid() {
 	local uuid='[0-9a-fA-F]\{8\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}'
 	if  [[ -f "$1" ]]; then
-		grep -v "$uuid" "$1" > "$1.no-uuid"
+		sed 's/^  *//' "$1" \
+			| grep -v "$uuid" \
+			| grep -v '^$' > "$1.no-uuid"
 		mv "$1.no-uuid" "$1"
 	fi
 }

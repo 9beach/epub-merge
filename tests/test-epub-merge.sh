@@ -1,30 +1,24 @@
 #!/bin/bash
 
 set -euo pipefail
+
 trap 'echo "Error (epub-merge): at line $LINENO" >&2' ERR INT TERM
 
-readonly AUTHOR_LOCAL_ENV=${AUTHOR_LOCAL_ENV:-0}
-TARGET_DIR=""
-TEMP_DIR=""
-
 cleanup() {
-	[[ -n "$TEMP_DIR" ]] && rm -fr "$TEMP_DIR"
-	true
+	[[ -n "$TEMP_DIR" ]] && rm -fr "$TEMP_DIR" || true
 }
 
 trap cleanup EXIT
 
+# export DEBUG=1
+TARGET_DIR=""
+TEMP_DIR=""
+
 EPUB_MERGE_DIR="$(realpath "$(dirname "$0")/..")"
 
-if [[ $AUTHOR_LOCAL_ENV == 1 ]]; then
-	# WARNING: Local use only - do not run elsewhere
-	SAMPLE_DIR="/Volumes/Norway/Backup/Test/epub-test"
-	TARGET_DIR="$HOME/Test/epub-test"
-else
-	SAMPLE_DIR="$(realpath "$(dirname "$0")/samples")"
-	TEMP_DIR="$(mktemp -d)"
-	TARGET_DIR="$TEMP_DIR"
-fi
+SAMPLE_DIR="$(realpath "$(dirname "$0")/samples")"
+TEMP_DIR="$(mktemp -d)"
+TARGET_DIR="$TEMP_DIR"
 
 epub_diff() {
 	"$EPUB_MERGE_DIR/tests/epub-diff.sh" "$@"
@@ -34,102 +28,133 @@ epub_merge() {
 	"$EPUB_MERGE_DIR/epub-merge" "$@"
 }
 
-ARG=""
-
-if [[ $# -eq 0 ]]; then
-	ARG=clean
-elif [[ $# -eq 1 ]]; then
-	ARG="$1"
-else
-	echo "Bad argument" >&2
-	exit 1
-fi
-
-case "$ARG" in
-	clean)
-		rm -rf "${TARGET_DIR:?}/.merged/" \
-			"${TARGET_DIR:?}/.splitted/" \
-			"${TARGET_DIR:?}/.splitted-merged/"
-		;;
-	merge)
-		rm -rf "$TARGET_DIR/.merge/"
-		;;
-	split)
-		rm -rf "$TARGET_DIR/.splitted/"
-		;;
-	merge-splitted)
-		rm -rf "$TARGET_DIR/.splitted-merged/"
-		;;
-	*)
-		echo "Bad argument" >&2
-		exit 1
-		;;
-esac
-
-if [[ $# -eq 1 && ( "$1" = "clean" || "$1" = "clear" ) ]]; then
-	rm -rf "$TARGET_DIR/.merged/" \
-		"$TARGET_DIR/.splitted-merged/" \
-		"$TARGET_DIR/.splitted/"
-fi
-
 tcd() {
-	[[ -d "$TARGET_DIR/$1" ]] && exit
-	rm -rf "${TARGET_DIR:?}/$1"
 	mkdir -p "$TARGET_DIR/$1"
 	cd "$TARGET_DIR/$1"
 }
 
-(
-	tcd .synced
-	echo ++ Test unit: setup
+########
 
-	mkdir -p "$TARGET_DIR"
-	rsync -a --delete --exclude .merged --exclude .splitted-merged \
-		--exclude .splitted "$SAMPLE_DIR/" "$TARGET_DIR"
-)
+echo ++ Unit test: setup
 
-(
-	tcd .merged
-	echo ++ Test unit: merge
+mkdir -p "$TARGET_DIR"
+rsync -a --delete "$SAMPLE_DIR/" "$TARGET_DIR"
 
-	# shellcheck disable=SC2012
-	ls ../merged | sed -e 's/.epub//' | while read -r line; do
-		epub_merge -q "../original/$line"*.epub
-	done
+########
 
-	cd ../merged
-	for i in *.epub; do
-		epub_diff "$i" ../.merged/"$i"
-	done
-)
+tcd .merged
+echo ++ Unit test: merge original
 
-(
-	tcd .splitted
-	echo ++ Test unit: split
+# shellcheck disable=SC2012
+epub_merge -q ../original/*.epub
 
-	for i in ../.merged/*; do
-		epub_merge -q -x "$i"
-	done
+epub_diff "sample.epub" ../merged/sample.epub
 
-	cd ../splitted
-	for i in *.epub; do
-		epub_diff "$i" ../.splitted/"$i"
-	done
-)
+########
 
-(
-	tcd .splitted-merged
-	echo ++ Test unit: merge-splitted
+tcd .splitted-merged
+echo ++ Unit test: merge splitted
 
-	# shellcheck disable=SC2012
-	ls ../merged | sed -e 's/.epub//' | while read -r line; do
-		epub_merge -q ../splitted/"$line"*.epub
-	done
+# shellcheck disable=SC2012
+epub_merge -q ../splitted/*.epub
 
-	cd ../merged
-	for i in *.epub; do
-		epub-diff.sh "$i" ../.splitted-merged/"$i"
-	done
-)
+epub_diff sample.epub ../merged/sample.epub
 
-echo "++ All done" || true
+########
+
+tcd .splitted
+echo ++ Unit test: -x option
+
+epub_merge -q -x ../merged/sample.epub
+
+cd ../splitted
+for i in *.epub; do
+	epub_diff "$i" ../.splitted/"$i"
+done
+
+########
+
+tcd .merged-O
+echo ++ Unit test: -O option
+
+epub_merge -qO ../original/sample2.epub ../original/sample1.epub \
+	../original/sample3.epub
+
+epub_diff sample.epub ../merged-O/sample.epub
+
+epub_merge -qx sample.epub
+
+cd ../splitted
+for i in *.epub; do
+	epub_diff "$i" ../.merged-O/"$i"
+done
+
+########
+
+tcd .merged-lsp
+echo ++ Unit test: -l, -s, -p options
+
+epub_merge -ql ko -s "번째 책" ../original/*.epub
+
+epub_diff sample.epub ../merged-lsp/sample.epub
+
+epub_merge -qx sample.epub
+
+cd ../splitted
+for i in *.epub; do
+	epub_diff "$i" ../.merged-lsp/"$i"
+done
+
+########
+
+tcd .force-write
+echo "++ Unit test: -f option"
+
+epub_merge -q ../original/*.epub
+cp sample.epub copied
+! epub_merge -q ../original/*.epub 2> /dev/null
+# If merged again, UUID changed, then epub_diff returns 0, diff returns 1
+diff -q sample.epub copied
+epub_merge -qf ../original/*.epub
+! diff -q sample.epub copied > /dev/null 2>&1
+epub_diff sample.epub copied
+
+########
+
+tcd .target-dir
+echo "++ Unit test: -d option"
+
+cd ..
+epub_merge -qd .target-dir original/*.epub
+
+epub_diff merged/sample.epub .target-dir/sample.epub
+
+########
+
+tcd .title
+echo "++ Unit test: -t, -n option"
+
+epub_merge -q -n "test hahaha" -t "sample" ../original/*.epub
+epub_diff ../merged/sample.epub "test hahaha.epub"
+
+########
+
+tcd .name
+echo "++ Unit test: -n option"
+
+epub_merge -q -n "test hahaha" ../original/*.epub
+[[ -f "test hahaha.epub" ]]
+
+########
+
+tcd .dir
+echo "++ Unit test: -d option"
+
+cd ..
+epub_merge -qd '.dir' original/*.epub
+
+epub_diff merged/sample.epub .dir/sample.epub
+
+########
+
+echo "++ Unit test: All done" || true
