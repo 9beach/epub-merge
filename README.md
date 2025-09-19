@@ -64,7 +64,7 @@ SYNOPSIS
      epub-merge -x merged-epup
 
 OPTIONS
-     -d directory   Output directory for the generated ePUB 
+     -d directory   Output directory for the generated ePUB files
                     (default: current directory)
      -f             Overwrite existing ePUB files with the same name
      -l lang        Specify language code (ko, en, ja, zh, ru, etc.)
