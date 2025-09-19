@@ -37,7 +37,7 @@ tcd() {
 
 ########
 
-echo ++ Unit test: setup
+echo ++ epub-merge test: setup
 
 cleanup
 
@@ -47,7 +47,7 @@ rsync -a --delete "$SAMPLE_DIR/" "$TARGET_DIR"
 ########
 
 tcd .merged
-echo ++ Unit test: merge
+echo ++ epub-merge test: merge
 
 # shellcheck disable=SC2012
 ls ../merged | sed -e 's/.epub//' | while read -r line; do
@@ -62,7 +62,7 @@ done
 ########
 
 tcd .splitted
-echo ++ Unit test: split
+echo ++ epub-merge test: split
 
 for i in ../.merged/*; do
 	epub_merge -q -x "$i"
@@ -76,7 +76,7 @@ done
 ########
 
 tcd .splitted-merged
-echo ++ Unit test: merge-splitted
+echo ++ epub-merge test: merge-splitted
 
 # shellcheck disable=SC2012
 ls ../merged | sed -e 's/.epub//' | while read -r line; do
@@ -85,9 +85,9 @@ done
 
 cd ../merged
 for i in *.epub; do
-	epub-diff.sh "$i" ../.splitted-merged/"$i"
+	epub_diff "$i" ../.splitted-merged/"$i"
 done
 
 ########
 
-echo "++ Unit test: All done" || true
+echo "++ epub-merge test: All done" || true

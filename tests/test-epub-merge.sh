@@ -35,7 +35,7 @@ tcd() {
 
 ########
 
-echo ++ Unit test: setup
+echo ++ epub-merge test: setup
 
 mkdir -p "$TARGET_DIR"
 rsync -a --delete "$SAMPLE_DIR/" "$TARGET_DIR"
@@ -43,7 +43,7 @@ rsync -a --delete "$SAMPLE_DIR/" "$TARGET_DIR"
 ########
 
 tcd .merged
-echo ++ Unit test: merge original
+echo ++ epub-merge test: merge original
 
 # shellcheck disable=SC2012
 epub_merge -q ../original/*.epub
@@ -53,7 +53,7 @@ epub_diff "sample.epub" ../merged/sample.epub
 ########
 
 tcd .splitted-merged
-echo ++ Unit test: merge splitted
+echo ++ epub-merge test: merge splitted
 
 # shellcheck disable=SC2012
 epub_merge -q ../splitted/*.epub
@@ -63,7 +63,7 @@ epub_diff sample.epub ../merged/sample.epub
 ########
 
 tcd .splitted
-echo ++ Unit test: -x option
+echo ++ epub-merge test: -x option
 
 epub_merge -q -x ../merged/sample.epub
 
@@ -75,7 +75,7 @@ done
 ########
 
 tcd .merged-O
-echo ++ Unit test: -O option
+echo ++ epub-merge test: -O option
 
 epub_merge -qO ../original/sample2.epub ../original/sample1.epub \
 	../original/sample3.epub
@@ -92,7 +92,7 @@ done
 ########
 
 tcd .merged-lsp
-echo ++ Unit test: -l, -s, -p options
+echo ++ epub-merge test: -l, -s, -p options
 
 epub_merge -ql ko -s "번째 책" ../original/*.epub
 
@@ -108,7 +108,7 @@ done
 ########
 
 tcd .force-write
-echo "++ Unit test: -f option"
+echo "++ epub-merge test: -f option"
 
 epub_merge -q ../original/*.epub
 cp sample.epub copied
@@ -122,7 +122,7 @@ epub_diff sample.epub copied
 ########
 
 tcd .target-dir
-echo "++ Unit test: -d option"
+echo "++ epub-merge test: -d option"
 
 cd ..
 epub_merge -qd .target-dir original/*.epub
@@ -132,7 +132,7 @@ epub_diff merged/sample.epub .target-dir/sample.epub
 ########
 
 tcd .title
-echo "++ Unit test: -t, -n option"
+echo "++ epub-merge test: -t, -n option"
 
 epub_merge -q -n "test hahaha" -t "sample" ../original/*.epub
 epub_diff ../merged/sample.epub "test hahaha.epub"
@@ -140,7 +140,7 @@ epub_diff ../merged/sample.epub "test hahaha.epub"
 ########
 
 tcd .name
-echo "++ Unit test: -n option"
+echo "++ epub-merge test: -n option"
 
 epub_merge -q -n "test hahaha" ../original/*.epub
 [[ -f "test hahaha.epub" ]]
@@ -148,7 +148,7 @@ epub_merge -q -n "test hahaha" ../original/*.epub
 ########
 
 tcd .dir
-echo "++ Unit test: -d option"
+echo "++ epub-merge test: -d option"
 
 cd ..
 epub_merge -qd '.dir' original/*.epub
@@ -157,4 +157,4 @@ epub_diff merged/sample.epub .dir/sample.epub
 
 ########
 
-echo "++ Unit test: All done" || true
+echo "++ epub-merge test: All done" || true
