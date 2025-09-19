@@ -112,11 +112,12 @@ echo "++ epub-merge test: -f option"
 
 epub_merge -q ../original/*.epub
 cp sample.epub copied
-! epub_merge -q ../original/*.epub 2> /dev/null
+epub_merge -q ../original/*.epub 2> /dev/null && false || true
+
 # If merged again, UUID changed, then epub_diff returns 0, diff returns 1
 diff -q sample.epub copied
 epub_merge -qf ../original/*.epub
-! diff -q sample.epub copied > /dev/null 2>&1
+diff -q sample.epub copied > /dev/null 2>&1 && false || true
 epub_diff sample.epub copied
 
 ########

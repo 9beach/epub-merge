@@ -16,8 +16,6 @@ cleanup() {
 trap cleanup EXIT
 
 TARGET_DIR=""
-TEMP_DIR=""
-
 EPUB_MERGE_DIR="$(realpath "$(dirname "$0")/..")"
 SAMPLE_DIR="/Volumes/Norway/Backup/Test/epub-test"
 TARGET_DIR="$HOME/Test/epub-test"

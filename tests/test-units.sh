@@ -3,6 +3,8 @@
 EPUB_MERGE_DIR="$(realpath "$(dirname "$0")/..")"
 
 export EPUB_MERGE_TEST=1
+
+# shellcheck disable=SC1091
 source "$EPUB_MERGE_DIR/epub-merge"
 
 # shellcheck disable=SC1091
