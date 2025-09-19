@@ -1,0 +1,93 @@
+#!/bin/bash
+
+# WARNING: Local use only - do not run elsewhere
+
+set -euo pipefail
+
+trap 'echo "Error (epub-merge): at line $LINENO" >&2' ERR INT TERM
+
+cleanup() {
+	rm -rf "${TARGET_DIR:?}/.merged/" \
+		"${TARGET_DIR:?}/.splitted/" \
+		"${TARGET_DIR:?}/.splitted-merged/"
+	true
+}
+
+trap cleanup EXIT
+
+TARGET_DIR=""
+TEMP_DIR=""
+
+EPUB_MERGE_DIR="$(realpath "$(dirname "$0")/..")"
+SAMPLE_DIR="/Volumes/Norway/Backup/Test/epub-test"
+TARGET_DIR="$HOME/Test/epub-test"
+
+epub_diff() {
+	"$EPUB_MERGE_DIR/tests/epub-diff.sh" "$@"
+}
+
+epub_merge() {
+	"$EPUB_MERGE_DIR/epub-merge" "$@"
+}
+
+tcd() {
+	mkdir -p "$TARGET_DIR/$1"
+	cd "$TARGET_DIR/$1"
+}
+
+########
+
+echo ++ Unit test: setup
+
+cleanup
+
+mkdir -p "$TARGET_DIR"
+rsync -a --delete "$SAMPLE_DIR/" "$TARGET_DIR"
+
+########
+
+tcd .merged
+echo ++ Unit test: merge
+
+# shellcheck disable=SC2012
+ls ../merged | sed -e 's/.epub//' | while read -r line; do
+	epub_merge -q "../original/$line"*.epub
+done
+
+cd ../merged
+for i in *.epub; do
+	epub_diff "$i" ../.merged/"$i"
+done
+
+########
+
+tcd .splitted
+echo ++ Unit test: split
+
+for i in ../.merged/*; do
+	epub_merge -q -x "$i"
+done
+
+cd ../splitted
+for i in *.epub; do
+	epub_diff "$i" ../.splitted/"$i"
+done
+
+########
+
+tcd .splitted-merged
+echo ++ Unit test: merge-splitted
+
+# shellcheck disable=SC2012
+ls ../merged | sed -e 's/.epub//' | while read -r line; do
+	epub_merge -q ../splitted/"$line"*.epub
+done
+
+cd ../merged
+for i in *.epub; do
+	epub-diff.sh "$i" ../.splitted-merged/"$i"
+done
+
+########
+
+echo "++ Unit test: All done" || true
