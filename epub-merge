@@ -11,8 +11,8 @@ trap 'printf "\033[31mError (epub-merge): at line $LINENO\033[0m\n" >&2; \
 
 # Called when program exits
 #
-# Ref: $ZIP_CONTENT_PATH, TEMP_DIR
-# Set: file
+# Reads: $ZIP_CONTENT_PATH, TEMP_DIR
+# Writes: files
 cleanup() {
 	if [[ -f "${TEMP_EPUB:-}" ]]; then
 		rm -f "$TEMP_EPUB"
@@ -108,7 +108,7 @@ TEMP_DIR=""
 # Zip filename before moving to output ePUBs
 TEMP_EPUB=""
 
-# Set to 1 to overwrite existing ePUB files with the same name
+# Set to 1 to overwrite existing ePUB filess with the same name
 OVERWRITE_EXISTING=""
 
 # Store the content of `zip -l ePUB`
@@ -153,7 +153,7 @@ error() {
 # Print gray log message if `-q' option not given 
 #
 # Args: message
-# Ref: $QUIET
+# Reads: $QUIET
 log() {
 	if [[ -z "$QUIET" ]]; then
 		printf '\033[90m%s\033[0m\n' "$*" >&2
@@ -163,7 +163,7 @@ log() {
 # Print orange log message if `-q' option not given 
 #
 # Args: message
-# Ref: $QUIET
+# Reads: $QUIET
 orange_log() {
 	if [[ -z "$QUIET" ]]; then
 		printf '\033[38;5;208m%s\033[0m\n' "$*" >&2
@@ -173,7 +173,7 @@ orange_log() {
 # Print gray debug message if DEBUG variables not set 
 #
 # Args: message
-# Ref: $DEBUG
+# Reads: $DEBUG
 debug() {
 	if [[ -n "$DEBUG" ]]; then
 		printf '\033[34mDEBUG - %s\033[0m\n' "$*" >&2
@@ -183,7 +183,7 @@ debug() {
 # Helper for debug function
 #
 # Args: message
-# Ref: $DEBUG
+# Reads: $DEBUG
 debug_var() {
 	local var_name="$1"
 	debug "$var_name: ${!var_name}"
@@ -191,8 +191,8 @@ debug_var() {
 
 # Parse command line args
 #
-# Ref: $@, many variables
-# Set: many variables
+# Reads: $@, many variables
+# Writes: many variables
 parse_opts() {
 	while getopts "n:t:l:p:s:d:fOqx" opt; do
 		case "$opt" in
@@ -233,7 +233,7 @@ parse_opts() {
 
 # Check system dependencies
 #
-# Set: file
+# Reads: files
 check_dependencies() {
 	local missing_deps=()
 
@@ -251,7 +251,7 @@ check_dependencies() {
 # Validate command line arguments
 #
 # Args: $@
-# Ref: file
+# Reads: files
 validate_arguments() {
 	if [[ -n "$EXTRACT_MODE" ]]; then
 		if [[ $# -ne 1 ]]; then
@@ -271,8 +271,8 @@ validate_arguments() {
 # Validate ePUB file structure
 #
 # Args: epub file
-# Ref: $EXTRACT_MODE
-# Set: $ZIP_CONTENT_PATH, file
+# Reads: $EXTRACT_MODE
+# Writes: $ZIP_CONTENT_PATH, files
 validate_epub() {
 	local epub_file="$1"
 	local required_files
@@ -338,8 +338,8 @@ get_common_prefix() {
 # Determine output epub filename and title from common prefix and $EPUB_NAME
 #
 # Args: filename 1, filename 2
-# Ref: $EPUB_NAME, $EPUB_NAME, file
-# Set: $EPUB_NAME, $EPUB_NAME
+# Reads: $EPUB_NAME, $EPUB_NAME, files
+# Writes: $EPUB_NAME, $EPUB_NAME
 generate_filename_and_title() {
 	if [[ -z "$EPUB_NAME" ]]; then
 		base1="$(basename "$1")"
@@ -365,8 +365,8 @@ generate_filename_and_title() {
 # Sort files naturally unless disabled
 #
 # Args: file1, file2, ...
-# Ref: $DO_NOT_SORT_PARAMS
-# Set: $EPUB_FILES
+# Reads: $DO_NOT_SORT_PARAMS
+# Writes: $EPUB_FILES
 sort_input_files() {
 	if [[ -n "${DO_NOT_SORT_PARAMS:-}" ]]; then
 		EPUB_FILES=("$@")
@@ -381,8 +381,8 @@ sort_input_files() {
 
 # Extract all ePUB files
 #
-# Ref: $EPUB_FILES(), $TEMP_DIR
-# Set: file
+# Reads: $EPUB_FILES(), $TEMP_DIR
+# Writes: files
 extract_epubs() {
 	for i in "${!EPUB_FILES[@]}"; do
 		log "Extracting ${EPUB_FILES[i]}"
@@ -395,7 +395,7 @@ extract_epubs() {
 # Detect language from content
 #
 # Args: opf file, lang
-# Ref: file
+# Reads: files
 # Out: lang
 detect_language() {
 	local opf_file="$1"
@@ -433,8 +433,8 @@ detect_language() {
 
 # Make paths arrays (OPF_FILES, NCX_FILES) of input ePUBs
 #
-# Ref: $EPUB_FILES, file
-# Set: $FIRST_NCX_ID, $NCX_FILES, $OPF_FILES
+# Reads: $EPUB_FILES, files
+# Writes: $FIRST_NCX_ID, $NCX_FILES, $OPF_FILES
 get_opf_ncx_array() {
 	for i in "${!EPUB_FILES[@]}"; do
 		# "$i"/* hides hidden dir in $i
@@ -462,9 +462,9 @@ get_opf_ncx_array() {
 
 # Detect volume prefix and suffix based on language
 #
-# Ref: $EPUB_LANG, $TOC_VOLUME_LABELS_GIVEN, $TOC_VOLUME_PREFIX, 
+# Reads: $EPUB_LANG, $TOC_VOLUME_LABELS_GIVEN, $TOC_VOLUME_PREFIX, 
 #      $TOC_VOLUME_SUFFIX
-# Set: $TOC_VOLUME_PREFIX, $TOC_VOLUME_SUFFIX
+# Writes: $TOC_VOLUME_PREFIX, $TOC_VOLUME_SUFFIX
 detect_volume_labels() {
 	local lang="$EPUB_LANG"
 	local prefix="$TOC_VOLUME_PREFIX"
@@ -503,8 +503,8 @@ detect_volume_labels() {
 
 # Setup base structure from first ePUB
 #
-# Ref: file
-# Set: file
+# Reads: files
+# Writes: files
 setup_base_structure() {
 	local first_extract="0"
 
@@ -535,7 +535,7 @@ setup_base_structure() {
 # Find file by pattern in directory
 #
 # Args: dir, pattern
-# Ref: file
+# Reads: files
 # Out: paths
 find_file() {
 	local dir="$1" pattern="$2"
@@ -544,8 +544,8 @@ find_file() {
 
 # Generate table of contents
 #
-# Ref: $NCX_FILES, $EPUB_FILES, $TOC_VOLUME_PREFIX, $TOC_VOLUME_SUFFIX
-# Set: file
+# Reads: $NCX_FILES, $EPUB_FILES, $TOC_VOLUME_PREFIX, $TOC_VOLUME_SUFFIX
+# Writes: files
 generate_ncx() {
 	detect_volume_labels
 
@@ -580,12 +580,12 @@ generate_ncx() {
 
 		# Merge navigation points
 		sed 's/<\/*navMap[^>]*>/\n<navMap>\n/;' "$cur_ncx" \
-                        | sed -n "/navMap/,/navMap/{
-                                /navMap/d
-                                s:id=[\"'][^\"']*:&-${i}:g
-                                s:src=[\"']:&$cur_ncx_dir/:g
-                                p
-                        }" >> toc.ncx
+			| sed -n "/navMap/,/navMap/{
+				/navMap/d
+				s:id=[\"'][^\"']*:&-${i}:g
+				s:src=[\"']:&$cur_ncx_dir/:g
+				p
+			}" >> toc.ncx
 
 		echo "  </navPoint>" >> "toc.ncx"
 	done
@@ -600,7 +600,7 @@ generate_ncx() {
 # Fix playOrder attributes in NCX
 #
 # Args: ncx file
-# Set: file
+# Writes: files
 fix_play_order() {
 	local ncx_file="$1"
 
@@ -624,8 +624,8 @@ fix_play_order() {
 
 # Generate OPF manifest and spine
 #
-# Ref: $OPF_FILES, $EPUB_FILES, $EPUB_NAME, $EPUB_TITLE
-# Set: file
+# Reads: $OPF_FILES, $EPUB_FILES, $EPUB_NAME, $EPUB_TITLE
+# Writes: files
 generate_opf() {
 	local manifest_file="content.opf.manifest"
 	local spine_file="content.opf.spine"
@@ -689,14 +689,14 @@ generate_opf() {
 # In: path content
 # Out: modified path content
 fix_ttf_path() {
-        sed -E 's#href=["'"'"'].*/[^"'"'"']*/([^/]+\.(ttf|otf))["'"'"']#href="fonts/\1"#gi'
+	sed -E 's#href=["'"'"'].*/[^"'"'"']*/([^/]+\.(ttf|otf))["'"'"']#href="fonts/\1"#gi'
 }
 
-# Is NFC better than NFD for Linux users?
+# FIXME: Is NFC better than NFD for Linux users?
 #
 # Args: filename
-# Ref: $ICONV_HAS_UTF_8_MAC
-# Set: file
+# Reads: $ICONV_HAS_UTF_8_MAC, files
+# Writes: files
 encode_nfc(){
 	if [ -n "$ICONV_HAS_UTF_8_MAC" ]; then
 		iconv -f UTF-8-MAC -t UTF-8 "$1" > "$1.nfc" 2>/dev/null \
@@ -706,8 +706,8 @@ encode_nfc(){
 
 # For epub-split, save current OPF and NCX to .epub-merge/
 #
-# Ref: $EPUB_FILES, $OPF_FILES, $NCX_FILES
-# Set: file
+# Reads: $EPUB_FILES, $OPF_FILES, $NCX_FILES
+# Writes: files
 backup_for_splitting() {
 	mkdir .epub-merge
 
@@ -760,7 +760,7 @@ backup_for_splitting() {
 
 # Consolidate merged archive and remove unused
 #
-# Set: file
+# Writes: files
 consolidate_contents() {
 	# Move all font files to central location
 	mkdir fonts
@@ -773,7 +773,7 @@ consolidate_contents() {
 		-o -iname "*.opf" -o -iname "*.ncx" \) \
 		-exec rm -rf {} + 2>/dev/null || true
 
-        find [0-9]* -type d -empty -delete || true
+	find [0-9]* -type d -empty -delete || true
 }
 
 # Calculate relative path from file to root
@@ -800,23 +800,17 @@ path_to_root() {
 #   a/b/c.txt -> "../"
 #   a/b.txt   -> ""
 #
-#   # Not ideal, but we assume $1 is always within a trunk and the path is 
-#   # always normalized and relative
-#   a.txt -> ""
-#   a/b/c.txt -> "../"
-#   ../../a.txt -> "../"
-#
 # Args: filepath
 # Out: modified path
 path_to_trunk() {
-        local parent
-        parent="$(dirname "$(dirname "$1" | sed -e 's:^\./::')")"
+	local parent
+	parent="$(dirname "$(dirname "$1" | sed -e 's:^\./::')")"
 
-        if [ "$parent" = "." ]; then
-                echo ""
-        else
-                echo "$parent/" | sed 's#[^/][^/]*#..#g'
-        fi
+	if [ "$parent" = "." ]; then
+		echo ""
+	else
+		echo "$parent/" | sed 's#[^/][^/]*#..#g'
+	fi
 }
 
 # Update font paths in CSS files while splitting ePUB
@@ -826,8 +820,8 @@ path_to_trunk() {
 #   url(1/b/c.ttf) -> url(../fonts/c.ttf)
 #   url(5/myfont.otf) -> url(fonts/myfont.otf)
 #
-# Set: file
-update_css_font_urls_for_splitting() {
+# Writes: files
+update_splitted_css_font_urls() {
 	local pattern='url\([^)]*/([^/]+\.(ttf|otf))[^)]*\)'
 	find . -type f -iname "*.css" -print0 | while IFS= read -r -d '' css; do
 		local root_path
@@ -848,8 +842,8 @@ update_css_font_urls_for_splitting() {
 #   url(a/b.ttf) -> url(../../fonts/c.ttf)
 #   url(a/b/c/myfont.otf) -> url(../../../../fonts/myfont.otf)
 #
-# Set: file
-update_css_font_urls_for_merging() {
+# Writes: files
+update_merged_css_font_urls() {
 	local pattern='url\([^)]*/([^/]+\.(ttf|otf))[^)]*\)'
 	find . -type f -iname "*.css" -print0 | while IFS= read -r -d '' css; do
 
@@ -876,8 +870,8 @@ fix_css_0_ttf_path() {
 
 # Finalize OPF and NCX files
 #
-# Ref: $FIRST_NCX_ID
-# Set: file
+# Reads: $FIRST_NCX_ID
+# Writes: files
 finalize_metadata() {
 	local uuid
 	uuid="$(uuidgen)"
@@ -886,15 +880,15 @@ finalize_metadata() {
 	# Update OPF with new UUID and clean paths
 	cat content.opf | tr -d '\r' \
 		| fix_css_0_ttf_path \
-	        | grep -vi '[0-9][0-9]*/.*\.ttf' \
-	        | grep -vi '[0-9][0-9]*/.*\.otf' \
-	        | sed -e "s/$uuid_pattern/$uuid/g" \
+		| grep -vi '[0-9][0-9]*/.*\.ttf' \
+		| grep -vi '[0-9][0-9]*/.*\.otf' \
+		| sed -e "s/$uuid_pattern/$uuid/g" \
 			-e "s:[\"']0/[^\"']*\.ncx['\"]:\"toc.ncx\":" \
 			-e "s:[\"']${FIRST_NCX_ID}-0[\"']:\"ncx\":" \
 			-e "s:['\"]${FIRST_NCX_ID}['\"]:\"ncx\":" \
 			-e 's:/\./:/:g' \
 		| grep -v '[0-9][0-9]*/.*\.ncx' \
-        > "content.opf.tmp" && mv content.opf.tmp content.opf
+		> "content.opf.tmp" && mv content.opf.tmp content.opf
 	encode_nfc content.opf
 
 	# Update NCX with new UUID
@@ -905,8 +899,8 @@ finalize_metadata() {
 # Create final ePUB file
 #
 # In: output ePUB realpath, base dir, font dir
-# Ref: file
-# Set: file, $PWD
+# Reads: files
+# Writes: files, $PWD
 create_epub() {
 	local output_realpath="$1"
 	local working_dir="$2"
@@ -940,8 +934,8 @@ create_epub() {
 
 # Create splitted ePUBs from extracted merged ePUB
 #
-# Ref: $OUTPUT_DIR, $TEMP_DIR
-# Set: file
+# Reads: $OUTPUT_DIR, $TEMP_DIR
+# Writes: files
 create_splitted_epubs() {
 	local status=0
 	local count
@@ -955,9 +949,9 @@ create_splitted_epubs() {
 
 		if [[ $OVERWRITE_EXISTING != 1 && \
 			-f "$OUTPUT_DIR/$cur_epub" ]]; then
-		status=1
-		orange_log "$cur_epub: already exists"
-		continue
+			status=1
+			orange_log "$cur_epub: already exists"
+			continue
 		fi
 
 		cp -r META-INF mimetype "$i"/
@@ -975,11 +969,9 @@ create_splitted_epubs() {
 
 # Extract merged ePUB and create splitted ePUBs
 #
-# FIXME: refactor me
-#
 # Args: merged epub
-# Ref: $OUTPUT_DIR, $TEMP_DIR
-# Set: file
+# Reads: $OUTPUT_DIR, $TEMP_DIR
+# Writes: files
 split_merged_epub() {
 	debug "Validate a merged-ePUB file"
 	validate_epub "$1"
@@ -994,7 +986,7 @@ split_merged_epub() {
 	cd "$TEMP_DIR" > /dev/null
 
 	# Update font paths in all CSS files to point to centralized fonts 
-	update_css_font_urls_for_splitting
+	update_splitted_css_font_urls
 
 	create_splitted_epubs
 }
@@ -1067,7 +1059,7 @@ main() {
 	consolidate_contents
 
 	# Update CSS font references
-	update_css_font_urls_for_merging
+	update_merged_css_font_urls
 
 	debug "Finalize metadata"
 	finalize_metadata

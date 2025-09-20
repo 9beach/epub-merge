@@ -14,7 +14,7 @@ cleanup() {
 
 trap cleanup EXIT
 
-grep-v-uuid() {
+filter_uuid_and_blank_lines() {
 	local uuid='[0-9a-fA-F]\{8\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}'
 	if  [[ -f "$1" ]]; then
 		sed 's/^  *//' "$1" \
@@ -35,10 +35,10 @@ unzip -q "$2" -d "$TEMP_DIR/2nd"
 cd "$TEMP_DIR"
 
 if [[ -z "${EPUB_DIFF_COMPARE_UUID:-}" ]]; then
-	grep-v-uuid "1st/content.opf"
-	grep-v-uuid "2nd/content.opf"
-	grep-v-uuid "1st/toc.ncx"
-	grep-v-uuid "2nd/toc.ncx"
+	filter_uuid_and_blank_lines "1st/content.opf"
+	filter_uuid_and_blank_lines "2nd/content.opf"
+	filter_uuid_and_blank_lines "1st/toc.ncx"
+	filter_uuid_and_blank_lines "2nd/toc.ncx"
 fi
 
 diff -r 1st 2nd
