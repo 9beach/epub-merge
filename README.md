@@ -2,6 +2,8 @@
 
 [epub-merge](https://github.com/9beach/epub-merge) is a lightweight command-line program written in `bash` that allows merging multiple EPUB files into one volume, or splitting volumes produced by epub-merge.
 
+✅ Supports both **EPUB 3** and **EPUB 2**.
+
 **Features:**
 - Runs on macOS and Linux terminals
 - Minimal dependencies - uses only built-in shell commands
@@ -61,7 +63,7 @@ NAME
 
 SYNOPSIS
      epub-merge [OPTIONS] epub1 epub2 [epub3 ...]
-     epub-merge -x merged-epup
+     epub-merge -x merged-epub
 
 OPTIONS
      -d directory   Output directory for the generated ePUB files

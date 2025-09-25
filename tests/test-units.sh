@@ -1,8 +1,9 @@
 #!/bin/bash
 
-EPUB_MERGE_DIR="$(realpath "$(dirname "$0")/..")"
-
 export EPUB_MERGE_TEST=1
+export DEBUG="${DEBUG:-}"
+
+EPUB_MERGE_DIR="$(realpath "$(dirname "$0")/..")"
 
 # shellcheck disable=SC1091
 source "$EPUB_MERGE_DIR/epub-merge"
@@ -10,8 +11,14 @@ source "$EPUB_MERGE_DIR/epub-merge"
 # shellcheck disable=SC1091
 source "$EPUB_MERGE_DIR/tests/assert.sh"
 
-assert_eq "$(path_to_trunk "a/b")" ""
+# path_to_root
+assert_eq "$(path_to_root "a.txt")" "."
 assert_eq "$(path_to_root "a/b/c.txt")" "../.."
+assert_eq "$(path_to_root "b/c.txt")" ".."
+assert_eq "$(path_to_root "a/b/c/d.txt")" "../../.."
+
+# path_to_trunk
+assert_eq "$(path_to_trunk "a/b")" ""
 assert_eq "$(path_to_trunk "a/b/c.txt")" "../"
 assert_eq "$(path_to_trunk "a/bb/ccc/dddd/eeee.txt")" "../../../"
 
@@ -20,5 +27,13 @@ assert_eq "$(path_to_trunk "a/bb/ccc/dddd/eeee.txt")" "../../../"
 assert_eq "$(path_to_trunk "//.//c/b/c.txt")" "//..//../"
 assert_eq "$(path_to_trunk "a")" ""
 assert_eq "$(path_to_trunk "../b/c.txt")" "../"
+
+# get_epub_version
+assert_eq "$(get_version "$EPUB_MERGE_DIR/tests/samples/original/sample1.epub")" 2.0
+assert_eq "$(get_version "$EPUB_MERGE_DIR/tests/samples-v3/original/v3-sample1.epub")" 3.0
+
+# xml_get_value_of_element_pattern
+xml='<title>Navigation</title><nav epub:type="toc"><li><a href="OEBPS/...'
+assert_eq "$(echo "$xml" | split_xml | get_xml_attr "nav ep" "epub:type")" "toc"
 
 assert_summary

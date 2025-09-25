@@ -14,13 +14,42 @@ cleanup() {
 
 trap cleanup EXIT
 
-filter_uuid_and_blank_lines() {
-	local uuid='[0-9a-fA-F]\{8\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}'
+XML_FORMATTER=""
+
+# Format XML/HTML file
+format_xml() {
+	local file="$1"
+
+	if [[ -z "$XML_FORMATTER" ]]; then
+		if command -v xmllint &> /dev/null; then
+			XML_FORMATTER="xmllint"
+		elif command -v python3 &> /dev/null; then
+			XML_FORMATTER="python3"
+		else
+			XML_FORMATTER="cat"
+			log "The XML formatter is not installed, which may cause errors during the merge process. Please install xmllint."
+		fi
+	fi
+
+	case "$XML_FORMATTER" in
+		"xmllint")
+			xmllint --recover --format "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+			;;
+		"python")
+			python3 -c "import xml.dom.minidom as x,sys; print(x.parseString(open(sys.argv[1]).read()).toprettyxml(indent='    '))" "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+			;;
+	esac
+}
+
+filter_uuid() {
+	local uuid='[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}'
 	if  [[ -f "$1" ]]; then
-		sed 's/^  *//' "$1" \
-			| grep -v "$uuid" \
-			| grep -v '^$' > "$1.no-uuid"
+		sed -E -e 's/^[[:space:]]+//' -e 's/[[:space:]]+$//' "$1" \
+			| tr -d '\r' \
+			| grep -Ev "($uuid|^[[:space:]]*$)" \
+			> "$1.no-uuid" || true
 		mv "$1.no-uuid" "$1"
+		format_xml "$1"
 	fi
 }
 
@@ -34,11 +63,19 @@ unzip -q "$2" -d "$TEMP_DIR/2nd"
 
 cd "$TEMP_DIR"
 
+find . -type f -iname "*.css" -print0 | while IFS= read -r -d '' css; do
+	grep -v "url(eOpenBooks.ttf)" "$css" > "$css".tmp && mv "$css".tmp "$css"
+done
+
+find . -type f \( -iname "*.opf" -o -iname "*.ncx"  -o -iname "*.xml" \) -print0 | while IFS= read -r -d '' file; do
+	format_xml "$file"
+done
+
 if [[ -z "${EPUB_DIFF_COMPARE_UUID:-}" ]]; then
-	filter_uuid_and_blank_lines "1st/content.opf"
-	filter_uuid_and_blank_lines "2nd/content.opf"
-	filter_uuid_and_blank_lines "1st/toc.ncx"
-	filter_uuid_and_blank_lines "2nd/toc.ncx"
+	filter_uuid "1st/content.opf"
+	filter_uuid "2nd/content.opf"
+	filter_uuid "1st/toc.ncx"
+	filter_uuid "2nd/toc.ncx"
 fi
 
-diff -r 1st 2nd
+diff --strip-trailing-cr -r 1st 2nd

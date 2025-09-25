@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+export DEBUG="${DEBUG:-}"
+
 trap 'echo "Error (epub-merge): at line $LINENO" >&2' ERR INT TERM
 
 cleanup() {
@@ -16,7 +18,7 @@ TEMP_DIR=""
 
 EPUB_MERGE_DIR="$(realpath "$(dirname "$0")/..")"
 
-SAMPLE_DIR="$(realpath "$(dirname "$0")/samples")"
+SAMPLE_DIR="${SAMPLE_DIR:-"$EPUB_MERGE_DIR/tests/samples"}"
 TEMP_DIR="$(mktemp -d)"
 TARGET_DIR="$TEMP_DIR"
 
@@ -58,7 +60,24 @@ echo ++ epub-merge test: merge splitted
 # shellcheck disable=SC2012
 epub_merge -q ../splitted/*.epub
 
-epub_diff sample.epub ../merged/sample.epub
+mv sample.epub 2nd-merge.epub
+epub_merge -xfq 2nd-merge.epub
+
+for i in sample?.epub; do
+	epub_diff "$i" ../splitted/"$i"
+done
+
+epub_merge -q sample?.epub
+mv sample.epub 3rd-merge.epub
+
+epub_diff 2nd-merge.epub 3rd-merge.epub
+diff 2nd-merge.epub 3rd-merge.epub > /dev/null && exit
+
+epub_merge -xfq 3rd-merge.epub
+
+for i in sample?.epub; do
+	epub_diff "$i" ../splitted/"$i"
+done
 
 ########
 
@@ -77,8 +96,8 @@ done
 tcd .merged-O
 echo ++ epub-merge test: -O option
 
-epub_merge -qO ../original/sample2.epub ../original/sample1.epub \
-	../original/sample3.epub
+epub_merge -qO ../original/sample1.epub ../original/sample3.epub \
+	../original/sample2.epub
 
 epub_diff sample.epub ../merged-O/sample.epub
 
