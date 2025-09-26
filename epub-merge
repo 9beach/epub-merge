@@ -735,7 +735,9 @@ EOF
 		echo "  </navPoint>"
 	done \
 	| fix_playorder \
-	| sed 's|/\./|/|g' \
+	| sed '
+		s#/\./#/#g
+		s#/[^/][^/]*/\.\./#/#g' \
 	>> "$toc_file"
 
 	echo -e "  </navMap>\n</ncx>" >> "$toc_file"
@@ -788,7 +790,11 @@ merge_navs() {
 
 	# Close NAV structure
 	echo -e '</ol></nav>\n</body>\n</html>' >> "$nav_file"
-	sed "s:/\./:/:g" "$nav_file" > "$nav_file".tmp && mv "$nav_file".tmp "$nav_file"
+	sed "
+		s:/\./:/:g
+		s#/[^/][^/]*/\.\./#/#g
+		" "$nav_file" \
+		> "$nav_file".tmp && mv "$nav_file".tmp "$nav_file"
 	format_xml "$nav_file"
 }
 
@@ -854,6 +860,7 @@ merge_opfs() {
 		s:[\"']0/[^\"']*\.ncx['\"]:\"$MERGED_NCX_FILE\":
 		s:[\"']${FIRST_NCX_ID}-0[\"']:\"$MERGED_NCX_ID\":
 		s:['\"]${FIRST_NCX_ID}['\"]:\"$MERGED_NCX_ID\":
+		s#/[^/][^/]*/\.\./#/#g
 		s:/\./:/:" \
 	| fix_font_paths \
 	| filter_dups \
