@@ -11,6 +11,20 @@ source "$EPUB_MERGE_DIR/epub-merge"
 # shellcheck disable=SC1091
 source "$EPUB_MERGE_DIR/tests/assert.sh"
 
+
+# Cleanup temp files on exit
+cleanup() {
+	if [[ -d "${TEMP_DIR:-}" ]]; then
+		rm -rf "$TEMP_DIR"
+	fi
+}
+
+trap cleanup EXIT
+
+TEMP_DIR="$(mktemp -d)"
+
+cd "$TEMP_DIR"
+
 # path_to_root
 assert_eq "$(path_to_root "a.txt")" "."
 assert_eq "$(path_to_root "a/b/c.txt")" "../.."
@@ -29,11 +43,31 @@ assert_eq "$(path_to_trunk "a")" ""
 assert_eq "$(path_to_trunk "../b/c.txt")" "../"
 
 # get_epub_version
+assert_eq "$(get_version "$EPUB_MERGE_DIR/tests/samples-v3/original/sample1.epub")" 3.0
 assert_eq "$(get_version "$EPUB_MERGE_DIR/tests/samples/original/sample1.epub")" 2.0
-assert_eq "$(get_version "$EPUB_MERGE_DIR/tests/samples-v3/original/v3-sample1.epub")" 3.0
 
 # xml_get_value_of_element_pattern
 xml='<title>Navigation</title><nav epub:type="toc"><li><a href="OEBPS/...'
 assert_eq "$(echo "$xml" | split_xml | get_xml_attr "nav ep" "epub:type")" "toc"
+
+css_path="EPUB/styles/layout.css"
+css="test url(../../rc/xx.ttf)\nhahaha url ('../../fonts/myfont.otf')"
+
+mkdir -p "a/b/c/"
+
+echo "src: url(../../../../my-font-dir/KoPubDotumMedium.ttf);" >> "a/b/c/d.css"
+echo "src: url(../../../my-rc-dir/KoPubDotumBold.otf);" >> "a/b/c/d.css"
+
+echo "src: url(../../../fonts/KoPubDotumMedium.ttf);" >> root
+echo "src: url(../../../fonts/KoPubDotumBold.otf);" >> root
+
+echo "src: url(../../fonts/KoPubDotumMedium.ttf);" >> trunk
+echo "src: url(../../fonts/KoPubDotumBold.otf);" >> trunk
+
+fix_fontpaths_to_root "a/b/c/d.css" > root.out
+fix_fontpaths_to_trunk "a/b/c/d.css" > trunk.out
+
+diff root root.out
+diff trunk trunk.out
 
 assert_summary

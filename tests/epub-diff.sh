@@ -63,12 +63,12 @@ unzip -q "$2" -d "$TEMP_DIR/2nd"
 
 cd "$TEMP_DIR"
 
-find . -type f -iname "*.css" -print0 | while IFS= read -r -d '' css; do
-	grep -v "url(eOpenBooks.ttf)" "$css" > "$css".tmp && mv "$css".tmp "$css"
+find . -type f \( -iname "*.opf" -o -iname "*.ncx"  -o -iname "nav.xhtml" \) -print0 | while IFS= read -r -d '' file; do
+	format_xml "$file"
 done
 
-find . -type f \( -iname "*.opf" -o -iname "*.ncx"  -o -iname "*.xml" \) -print0 | while IFS= read -r -d '' file; do
-	format_xml "$file"
+find . -type f \( -iname "*.css" \) -print0 | while IFS= read -r -d '' i; do
+	grep -v 'url(eOpenBooks.ttf)' "$i" > "$i.tmp" && mv "$i.tmp" "$i"
 done
 
 if [[ -z "${EPUB_DIFF_COMPARE_UUID:-}" ]]; then
@@ -78,4 +78,7 @@ if [[ -z "${EPUB_DIFF_COMPARE_UUID:-}" ]]; then
 	filter_uuid "2nd/toc.ncx"
 fi
 
-diff --strip-trailing-cr -r 1st 2nd
+rm "1st/META-INF/container.xml"
+rm "2nd/META-INF/container.xml"
+
+diff -r 1st 2nd

@@ -3,6 +3,7 @@
 set -euo pipefail
 
 TEST_DIR="$(realpath "$(dirname "$0")")"
+
 epub_merge() {
 	"$TEST_DIR/../epub-merge" "$@"
 }

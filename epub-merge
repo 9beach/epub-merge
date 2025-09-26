@@ -167,7 +167,7 @@ format_xml() {
 
 # Split XML elements for easier processing
 split_xml() {
-    tr -d '\n' < "${1:-/dev/stdin}" | sed 's/</\n</g'
+	tr -d '\n' < "${1:-/dev/stdin}" | sed 's/</\n</g'
 }
 
 # Extract attribute value from XML pattern
@@ -270,12 +270,16 @@ get_version() {
 	opf_path="$(unzip -p "$epub" META-INF/container.xml \
 		| split_xml \
 		| get_xml_attr full-path full-path)"
+
+	debug_var epub
+	debug_var opf_path
+
 	[ -z "$opf_path" ] && return 1
 
 	unzip -p "$epub" "$opf_path" \
 		| split_xml \
-		| get_xml_attr "package[[:space:]]+.*xmlns" version
-	}
+		| get_xml_attr 'package.*xmlns' version
+}
 
 # Check system dependencies
 check_deps() {
@@ -341,7 +345,8 @@ validate_epub() {
 		return 1
 	fi
 
-	if ! grep -qEi "(mimetype|META-INF/container.xml|\.opf)$" "$temp_file"; then
+	if ! grep -qEi "(mimetype|META-INF/container.xml|\.opf)$" \
+			"$temp_file"; then
 		log "Missing required file '$pattern' in '$epub_file'"
 		rm -f "$temp_file"
 		return 1
@@ -367,11 +372,9 @@ validate_epub() {
 
 # Fix NCX playOrder attributes
 fix_playorder() {
-	debug_func "$@"
-	local ncx_file="$1"
-
+	local mark_done="aqswde"
 	# Re-sequence playOrder attributes for proper navigation
-	awk -v regex="playOrder=\"[0-9][0-9]*\"" -v prefix="aqswde=\"" \
+	awk -v regex="playOrder=\"[0-9][0-9]*\"" -v prefix="${mark_done}=\"" \
 		-v suffix="\"" '
 	{
 		while (match($0, regex)) {
@@ -382,7 +385,8 @@ fix_playorder() {
 			}
 		print $0;
 	}
-	' "$ncx_file" | sed 's/aqswde/playOrder/g'
+	' \
+	| sed "s/${mark_done}/playOrder/g"
 }
 
 # Generate OPF header section
@@ -422,15 +426,8 @@ path_to_trunk() {
 
 # Fix font paths for merged ePUB
 # ='path/to/myfont.TTF' -> ='fonts/myfont.TTF'
-fix_font_paths_merged() {
+fix_font_paths() {
 	sed -E 's#href=["'"'"'].*/[^"'"'"']*/([^/]+\.(ttf|otf|woff|woff2|eot))["'"'"']#href="fonts/\1"#gi'
-}
-
-# Fix font paths for extracted ePUBs
-# href='0/path/to/myfont.TTF' -> href='fonts/myfont.TTF'
-fix_font_paths_extracted() {
-	sed -E 's#href=["'"'"'][0-9]+/[^"'"'"']*/([^/]+\.(ttf|otf|woff|woff2|eot))["'"'"']#href="fonts/\1"#gi' \
-	| filter_dups | grep -ivE '[0-9][0-9]*/.*\.(ncx|otf|ttf|woff|woff2|eot)'
 }
 
 # --- Command line parsing and validation
@@ -479,7 +476,7 @@ validate_args() {
 }
 
 # Generate output filename and title from input files
-gen_output_name() {
+gen_output_names() {
 	if [[ -z "$EPUB_NAME" ]]; then
 		EPUB_NAME="$(get_prefix "$(basename "$1")" "$(basename "$2")")"
 	fi
@@ -555,7 +552,7 @@ detect_language() {
 }
 
 # Collect OPF/NCX/NAV file paths, and format XML
-collect_file_paths_and_format() {
+collect_file_paths_and_format_xml() {
 	for i in "${!EPUB_FILES[@]}"; do
 		local cur_epub="${EPUB_FILES[i]}"
 
@@ -662,23 +659,21 @@ setup_base() {
 	cp -r "$first_extract/META-INF" "$first_extract/mimetype" "."
 
 	# Update container.xml to point to our new OPF
-	#
-	# Handle cases where full-path and its value may be split across 
-	# multiple lines, e.g.:
-	#   full-path =
-	#       "package.opf"
-	sed -E '
-		:a
-		N
-		$!ba
-		s/full-path[[:space:]]*=[[:space:]]*["'\''][^"'\'']*["'\'']/full-path="content.opf"/g
-		' 0/META-INF/container.xml > META-INF/container.xml
+	cat > META-INF/container.xml << EOF
+<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+   <rootfiles>
+      <rootfile full-path="content.opf" media-type="application/oebps-package+xml"/>
+
+   </rootfiles>
+</container>
+EOF
 
 	# Add iBooks display options if not present
 	local ibooks="META-INF/com.apple.ibooks.display-options.xml"
 	if [[ ! -f "$ibooks" ]]; then
 		log "Adding iBooks display options"
-		        cat > "$ibooks" << 'EOF'
+		        cat > "$ibooks" << EOF
 <?xml version="1.0" encoding="UTF-8" ?>
 <display_options>
   <platform name="*">
@@ -689,10 +684,12 @@ EOF
 	fi
 }
 
-NEW_UUID=""
 readonly UUID_PATTERN='[0-9a-fA-F]\{8\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{12\}'
 
 merge_ncxs() {
+	debug_func "$@"
+	local uuid="$1"
+
 	[[ -z "$FIRST_NCX" ]] && return 0
 
 	local prefix="$TOC_VOLUME_PREFIX"
@@ -700,11 +697,11 @@ merge_ncxs() {
 	local toc_file="$MERGED_NCX_FILE"
 
 	# Initialize NCX with header
-	xml_grep_before_tag navMap "$FIRST_NCX" \
-		| sed -e "s/$UUID_PATTERN/$NEW_UUID/g" \
-		| tr -d '\r' \
-		> "${toc_file}"
-	echo "  <navMap>" >> "$toc_file"
+	{
+		xml_grep_before_tag navMap "$FIRST_NCX" \
+			| sed -e "s/$UUID_PATTERN/$uuid/"
+		echo "  <navMap>"
+	}  > "$toc_file"
 
 	# Process each volume
 	for i in "${!EPUB_FILES[@]}"; do
@@ -719,7 +716,7 @@ merge_ncxs() {
 
 		# Add volume entry
 		# shellcheck disable=SC2129
-		cat >> "$toc_file" << EOF
+		cat << EOF
   <navPoint id="volume-$i" playOrder="1">
     <navLabel>
       <text>$prefix$volume_num$suffix</text>
@@ -730,22 +727,20 @@ EOF
 		get_xml_element \
 			'content[[:space:]]*src[[:space:]]*=' "$cur_ncx" \
 			| sed "s#[[:space:]]*src=[[:space:]]*.#&${cur_ncx_dir}/#" \
-			>> "$toc_file"
 
 		# Merge navigation points
 		extract_and_modify_xml \
-				navMap "" "$cur_ncx_dir" "$i" "$cur_ncx" \
-			>> "$toc_file"
+				navMap "" "$cur_ncx_dir" "$i" "$cur_ncx"
 
-		echo "  </navPoint>" >> "$toc_file"
-	done
+		echo "  </navPoint>"
+	done \
+	| fix_playorder \
+	| sed 's|/\./|/|g' \
+	>> "$toc_file"
 
 	echo -e "  </navMap>\n</ncx>" >> "$toc_file"
 
-	fix_playorder "$toc_file" \
-		| sed 's|/\./|/|g' \
-		> "$toc_file".tmp \
-		&& mv "$toc_file".tmp "$toc_file"
+	format_xml "$toc_file"
 }
 
 # Merge NAV files for ePUB 3.0
@@ -760,13 +755,14 @@ merge_navs() {
 	local nav_file="$MERGED_NAV_FILE"
 
 	# Initialize NAV with header
-	xml_grep_before_tag body "$FIRST_NAV" | sed "s#href=.#&$(dirname "$FIRST_NAV")/#" > "$nav_file"
 
 	{
+		xml_grep_before_tag body "$FIRST_NAV" \
+			| sed "s#href=.#&$(dirname "$FIRST_NAV")/#" 
 		echo '<body>'
 		echo '<nav epub:type="toc">'
 		echo "<h1>$EPUB_TITLE</h1><ol>"
-	} >> "$nav_file"
+	} > "$nav_file"
 
 	# Process each volume
 	for i in "${!EPUB_FILES[@]}"; do
@@ -781,29 +777,32 @@ merge_navs() {
 
 		ref="$cur_nav_dir/$(get_xml_attr "a[[:space:]]*href" "href" "$cur_nav")"
 		# Add volume entry and link
-		echo "<li style='list-style: none;' id=\"vol-$i=\"><a href=\"$ref\">$prefix$volume_num$suffix</a></li>" \
-			>> "$nav_file"
+		echo "<li style='list-style: none;' id=\"vol-$i=\"><a href=\"$ref\">$prefix$volume_num$suffix</a></li>"
 
 		# Merge navigation points
 		debug_var cur_nav_dir
 		extract_and_modify_xml \
 			nav "epub.type=.toc." "$cur_nav_dir" "$i" "$cur_nav" \
-			| grep -v '<h[0-6]' \
-			>> "$nav_file"
-	done
+			| grep -v '<h[0-6]'
+	done >> "$nav_file"
 
 	# Close NAV structure
 	echo -e '</ol></nav>\n</body>\n</html>' >> "$nav_file"
 	sed "s:/\./:/:g" "$nav_file" > "$nav_file".tmp && mv "$nav_file".tmp "$nav_file"
+	format_xml "$nav_file"
 }
 
 # Merge all OPF manifests and spines
 merge_opfs() {
+	debug_func "$@"
+	local uuid="$1"
 	local manifest_file="content.opf.manifest"
 	local spine_file="content.opf.spine"
 
 	# Initialize OPF with header
-	gen_opf_header "${OPF_FILES[0]}" "$EPUB_TITLE" > "content.opf"
+	gen_opf_header "${OPF_FILES[0]}" "$EPUB_TITLE" \
+		| sed "s/$UUID_PATTERN/$uuid/" \
+		> "content.opf"
 
 	# Process each volume for manifest and spine
 	for i in "${!EPUB_FILES[@]}"; do
@@ -825,9 +824,6 @@ merge_opfs() {
 		error "Failed to read <spine> or <manifest> in OPF file"
 	fi
 
-	# Remove all nav properties
-	sed "s:[[:space:]]*properties[[:space:]]*=[[:space:]]*[\"']nav[^\"']*[\"']::" "$manifest_file" > "$manifest_file".tmp && mv "$manifest_file".tmp "$manifest_file"
-
 	# Assemble final OPF
 	{
 		echo "  <manifest>"
@@ -836,7 +832,9 @@ merge_opfs() {
 			echo "<item id=\"$MERGED_NAV_ID\" href=\"$MERGED_NAV_FILE\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>"
 		fi
 
-		cat "$manifest_file"
+		# Remove all nav properties
+		sed "s:[[:space:]]*properties[[:space:]]*=[[:space:]]*[\"']nav[^\"']*[\"']::" "$manifest_file"
+
 		echo "  </manifest>"
 
 		if [[ -n "$FIRST_NCX" ]]; then
@@ -851,109 +849,90 @@ merge_opfs() {
 
 		cat "$spine_file"
 		echo -e "  </spine>\n</package>"
-	} >> content.opf
-
-	rm -f "$manifest_file" "$spine_file"
-
-	finalize_opf
-}
-
-# Change uuidm fix font paths, and encode NFC
-finalize_opf() {
-	debug_func "*@"
-
-	# Change FIRST_NCX_ID to "ncx"
-	sed "
-		s/$UUID_PATTERN/$NEW_UUID/g
+	} \
+	| sed "
 		s:[\"']0/[^\"']*\.ncx['\"]:\"$MERGED_NCX_FILE\":
 		s:[\"']${FIRST_NCX_ID}-0[\"']:\"$MERGED_NCX_ID\":
 		s:['\"]${FIRST_NCX_ID}['\"]:\"$MERGED_NCX_ID\":
-		s:/\./:/:" content.opf \
-		| fix_font_paths_extracted \
-		| grep -ivE '[0-9][0-9]*/.*\.(ncx|otf|ttf|woff|woff2|eot)' \
-		| tr -d '\r' \
-		> "content.opf.tmp" && mv content.opf.tmp content.opf
-	to_nfc content.opf
+		s:/\./:/:" \
+	| fix_font_paths \
+	| filter_dups \
+	| grep -ivE '[0-9][0-9]*/.*\.(ncx|otf|ttf|woff|woff2|eot)' \
+	>> "content.opf"
 
+	to_nfc content.opf
+	format_xml content.opf
+
+	rm -f "$manifest_file" "$spine_file"
 }
 
 # Backup original files for splitting
 backup_originals() {
 	debug_func
-	mkdir .epub-merge
+	mkdir -p .epub-merge
+
 	local no_ncx="___no_ncx_file___"
 	local no_nav="___no_nav_file___"
 
+	adjust_path() {
+		local path="$1" idx="$2"
+		echo "${path}/" | sed -E "s:^$idx/::; s://:/:; s:^$:.:"
+	}
+
 	for i in "${!EPUB_FILES[@]}"; do
 		local cur_opf="${OPF_FILES[i]}"
-		local cur_opf_dir
-		cur_opf_dir="$(dirname "$cur_opf")"
-
 		local cur_ncx="${NCX_FILES[i]:-$no_ncx}"
-		local cur_ncx_dir
-		cur_ncx_dir="$(dirname "$cur_ncx")"
+		local cur_nav="${NAV_FILES[i]:-$no_nav}"
 
-		debug_var cur_ncx
-
-		local new_opf_dir
-		new_opf_dir="$(echo "$cur_opf_dir/" \
-			| sed -e "s:^$i/::" -e "s://:/:" -e "s:^$:.:")"
-
-		local new_ncx_dir
-		new_ncx_dir="$(echo "$cur_ncx_dir/" \
-			| sed -e "s:^$i/::" -e "s://:/:" -e "s:^$:.:")"
-
-		debug_var cur_ncx_dir
+		local new_opf_dir new_ncx_dir new_nav_dir
+		new_opf_dir=$(adjust_path "$(dirname "$cur_opf")" "$i")
+		new_ncx_dir=$(adjust_path "$(dirname "$cur_ncx")" "$i")
+		new_nav_dir=$(adjust_path "$(dirname "$cur_nav")" "$i")
 
 		local cur_ncx_id
 		if [[ "$cur_ncx" != "$no_ncx" ]]; then
-			cur_ncx_id="$(grep "$(basename "$cur_ncx")" "$cur_opf" \
-				| sed -n 's/.*id="\([^"]*\)".*/\1/p')"
+			cur_ncx_id=$(grep "$(basename "$cur_ncx")" "$cur_opf" \
+				| sed -n -E 's/.*id="([^"]*)".*/\1/p')
 		fi
-                cur_ncx_id="${cur_ncx_id:-$no_ncx}"
-		debug_var cur_ncx_id
+		cur_ncx_id="${cur_ncx_id:-$no_ncx}"
 
-		debug_var new_opf_dir
-		debug_var cur_opf
+		# OPF
+		format_xml "$cur_opf"
+		sed -E "
+		s:<(item|reference).*href=[\"']:&$new_opf_dir/:g
+		s:(<(item|reference).*href=.*)(//):\1/:
+		s:'\./:':g
+		s:\"\\./:\":g
+		s:href=[\"'][^'\"]*\.ncx['\"]:href=\"toc.ncx\":
+		s:href=[\"'][^'\"]*$(basename "$cur_nav")['\"]:href=\"$MERGED_NAV_FILE\":
+		s:[\"']${cur_ncx_id}[\"']:\"ncx\":
+		" "$cur_opf" | fix_font_paths > ".epub-merge/$i.opf"
 
-		local cur_nav="${NAV_FILES[i]:-$no_nav}"
-		local cur_nav_dir
-		cur_nav_dir="$(dirname "$cur_nav")"
-
-		local new_nav_dir
-		new_nav_dir="$(echo "$cur_nav_dir/" \
-			| sed -e "s:^$i/::" -e "s://:/:" -e "s:^$:.:")"
-
-		# Change paths of fonts, ncx, and nav in opf file
-		sed -e "s:href=[\"']:&$new_opf_dir/:g" \
-			-e "s:'\./:':g" \
-			-e "s:\"\./:\":g" \
-			-e "s:href=[\"'][^'\"]*\.ncx['\"]:href=\"toc.ncx\":" \
-			-e "s:href=[\"'][^'\"]*$(basename "$cur_nav")['\"]:href=\"nav.xhtml\":" \
-			-e "s:\(href=.*\)\(//\):\1/:" \
-			-e "s:[\"']${cur_ncx_id}['\"]:\"ncx\":" "$cur_opf" \
-			| fix_font_paths_merged \
-			| tr -d '\r' \
-			> .epub-merge/"$i".opf
-
-		# Transform: old_path -> from_new_ncx_to_old_ncx/old_path
+		# NCX
 		if [[ "$cur_ncx" != "$no_ncx" ]]; then
-			sed -e "s:src=[\"']:&$new_ncx_dir/:" \
-				-e "s:'\./:':g" \
-				-e "s:\(src=.*\)\(//\):\1/:" \
-				-e "s:\"\./:\":g" "$cur_ncx" \
-				> .epub-merge/"$i".ncx
-		fi
-		if [[ "$cur_nav" != "$no_nav" ]]; then
-			sed -e "s:href=[\"']:&$new_nav_dir/:" \
-				-e "s:'\./:':g" \
-				-e "s:\(href=.*\)\(//\):\1/:" \
-				-e "s:\"\./:\":g" "$cur_nav" \
-				> .epub-merge/"$i".nav
+			format_xml "$cur_ncx"
+			sed -E "
+			s:src=[\"']:&$new_ncx_dir/:g
+			s:'\./:':g
+			s:(src=.*)(//):\1/:
+			s:\"\\./:\":g
+			" "$cur_ncx" > ".epub-merge/$i.ncx"
 		fi
 
-		basename "${EPUB_FILES[i]}" > .epub-merge/"$i".name
-		to_nfc .epub-merge/"$i".name
+		# NAV
+		if [[ "$cur_nav" != "$no_nav" ]]; then
+			format_xml "$cur_nav"
+			sed -E "
+			s:href=[\"']:&$new_nav_dir/:g
+			s:'\./:':g
+			s:(href=.*)(//):\1/:
+			s:\"\\./:\":g
+			" "$cur_nav" > ".epub-merge/$i.nav"
+		fi
+
+		# Filename
+		basename "${EPUB_FILES[i]}" > ".epub-merge/$i.name"
+		to_nfc ".epub-merge/$i.name"
 	done
 }
 
@@ -974,16 +953,27 @@ consolidate_merged() {
 	find [0-9]* -type d -empty -delete || true
 }
 
+# Update CSS font URLs for merged ePUB
+# Merged, so one depth more
+fix_fontpaths_to_root() {
+	local rpath
+	rpath="$(path_to_root "$1")"
+	sed -E "s#url[[:space:]]*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url(${rpath}/fonts/\\1)#i" "$1"
+}
+
+# Update CSS font URLs for split ePUBs
+# Trunk dirs(0, 1, 2, ...) are now root
+fix_fontpaths_to_trunk() {
+	local rpath
+	rpath="$(path_to_trunk "$1")"
+	sed -E "s#url[[:space:]]*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url(${rpath}fonts/\\1)#i" "$1"
+}
+
 # Update CSS font URLs for split ePUB (digits/path -> ../fonts/)
 update_css_fonts_for_split() {
 	debug_func "*@"
-	local pattern="url[[:space:]]*\([^)]*/([^\"'/]+\.(ttf|otf|woff|woff2|eot))[^)]*[\"']?\)"
 	find . -type f -iname "*.css" -print0 | while IFS= read -r -d '' css; do
-		local root_path
-		root_path="$(path_to_trunk "$css")"
-		local replacement="url(${root_path}fonts/\\1)"
-
-		sed -E "s#${pattern}#${replacement}#gi" "$css" \
+		fix_fontpaths_to_trunk "$css" \
 			> "$css.tmp" \
 			&& mv "$css.tmp" "$css"
 	done
@@ -992,15 +982,10 @@ update_css_fonts_for_split() {
 # Update CSS font URLs for merged ePUB (css -> fonts/)
 update_css_fonts_for_merge() {
 	debug_func "*@"
-	local pattern='url\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)'
 	find . -type f -iname "*.css" -print0 | while IFS= read -r -d '' css; do
-
 		# New path from css to font is the concatenation of path from 
 		# css to altered root and altered font path (/fonts)
-		dir="$(path_to_root "$css")"
-		replacement="url($dir/fonts/\\1)"
-
-		sed -E "s#${pattern}#${replacement}#gi" "$css" \
+		fix_fontpaths_to_root "$css" \
 			> "$css.tmp" \
 			&& mv "$css.tmp" "$css"
 	done
@@ -1143,13 +1128,11 @@ main() {
 	readonly TEMP_EPUB
 
 	if [[ -n "$EXTRACT_MODE" ]]; then
-		extract_merged_epub "$1"
-
-		exit
+		extract_merged_epub "$1" && exit 0 || exit 1
 	fi
 
-	# Determine output filename
-	gen_output_name "$1" "$2"
+	# Determine output filename and epub title
+	gen_output_names "$1" "$2"
 
 	# Validate all ePUB files
 	for epub in "$@"; do
@@ -1169,7 +1152,7 @@ main() {
 	cd "$TEMP_DIR" > /dev/null
 
 	# Get paths lists OPF/NCX/NAV_FILES
-	collect_file_paths_and_format
+	collect_file_paths_and_format_xml
 
 	# Setup base structure (mimetype, META-INF/*, ...)
 	setup_base
@@ -1179,15 +1162,15 @@ main() {
 	readonly EPUB_LANG
 	detect_volume_labels
 
-	NEW_UUID="$(uuidgen)"
-	readonly NEW_UUID
+	local uuid
+	uuid="$(uuidgen)"
 
 	# Generate NCX/NAV/OPF
-	merge_ncxs
 	merge_navs
-	merge_opfs
+	merge_ncxs "$uuid"
+	merge_opfs "$uuid"
 
-	# Backup [0-9]*/**/*.(opf|ncx|nav) to ".epub-merged/
+	# Backup [0-9]*/**/*.(opf|ncx|nav) to ".epub-merged/"
 	backup_originals
 
 	# Consolidate merged archive and remove unused
