@@ -748,7 +748,6 @@ EOF
 # Merge NAV files for ePUB 3.0
 merge_navs() {
 	debug_func
-	debug_var FIRST_NAV
 	# No nav
 	[[ -z "$FIRST_NAV" ]] && return 0
 
@@ -779,7 +778,7 @@ merge_navs() {
 
 		ref="$cur_nav_dir/$(get_xml_attr "a[[:space:]]*href" "href" "$cur_nav")"
 		# Add volume entry and link
-		echo "<li style='list-style: none;' id=\"vol-$i=\"><a href=\"$ref\">$prefix$volume_num$suffix</a></li>"
+		echo "<li style='list-style: none !important; margin: 0 !important; padding: 0 !important;' id=\"vol-$i=\"><a href=\"$ref\">$prefix$volume_num$suffix</a></li>"
 
 		# Merge navigation points
 		debug_var cur_nav_dir
@@ -849,10 +848,6 @@ merge_opfs() {
 			echo "<spine>"
 		fi
 
-		if [[ -n "$FIRST_NAV" ]]; then
-			echo "<itemref idref=\"$MERGED_NAV_ID\"/>"
-		fi
-
 		cat "$spine_file"
 		echo -e "  </spine>\n</package>"
 	} \
@@ -906,14 +901,15 @@ backup_originals() {
 		# OPF
 		format_xml "$cur_opf"
 		sed -E "
-		s:<(item|reference).*href=[\"']:&$new_opf_dir/:g
-		s:(<(item|reference).*href=.*)(//):\1/:
-		s:'\./:':g
-		s:\"\\./:\":g
-		s:href=[\"'][^'\"]*\.ncx['\"]:href=\"toc.ncx\":
-		s:href=[\"'][^'\"]*$(basename "$cur_nav")['\"]:href=\"$MERGED_NAV_FILE\":
-		s:[\"']${cur_ncx_id}[\"']:\"ncx\":
-		" "$cur_opf" | fix_font_paths > ".epub-merge/$i.opf"
+			s:<(item|reference).*href=[\"']:&$new_opf_dir/:g
+			s:(<(item|reference).*href=.*)(//):\1/:
+			s:'\./:':g
+			s:\"\\./:\":g
+			s:href=[\"'][^'\"]*\.ncx['\"]:href=\"toc.ncx\":
+			s:href=[\"'][^'\"]*$(basename "$cur_nav")['\"]:href=\"$MERGED_NAV_FILE\":
+			s:[\"']${cur_ncx_id}[\"']:\"ncx\":" "$cur_opf" \
+			| fix_font_paths \
+			> ".epub-merge/$i.opf"
 
 		# NCX
 		if [[ "$cur_ncx" != "$no_ncx" ]]; then
