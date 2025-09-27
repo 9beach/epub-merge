@@ -157,10 +157,10 @@ format_xml() {
 
 	case "$XML_FORMATTER" in
 		"xmllint")
-			xmllint --recover --format "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+			xmllint --recover --format --noblanks "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
 			;;
 		"python")
-			python3 -c "import xml.dom.minidom as x,sys; print(x.parseString(open(sys.argv[1]).read()).toprettyxml(indent='    '))" "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+			python3 -c "import xml.dom.minidom as x,sys; print(x.parseString(open(sys.argv[1]).read()).toprettyxml(indent='    '))" "$file" | grep -v "^ *$" > "${file}.tmp" && mv "${file}.tmp" "$file"
 			;;
 	esac
 }
@@ -904,7 +904,7 @@ backup_originals() {
 			s:<(item|reference).*href=[\"']:&$new_opf_dir/:g
 			s:(<(item|reference).*href=.*)(//):\1/:
 			s:'\./:':g
-			s:\"\\./:\":g
+			s:\"\./:\":g
 			s:href=[\"'][^'\"]*\.ncx['\"]:href=\"toc.ncx\":
 			s:href=[\"'][^'\"]*$(basename "$cur_nav")['\"]:href=\"$MERGED_NAV_FILE\":
 			s:[\"']${cur_ncx_id}[\"']:\"ncx\":" "$cur_opf" \
@@ -918,7 +918,8 @@ backup_originals() {
 			s:src=[\"']:&$new_ncx_dir/:g
 			s:'\./:':g
 			s:(src=.*)(//):\1/:
-			s:\"\\./:\":g
+			s:src=[\"'][^'\"]*$(basename "$cur_nav")['\"]:href=\"$MERGED_NAV_FILE\":
+			s:\"\./:\":g
 			" "$cur_ncx" > ".epub-merge/$i.ncx"
 		fi
 
@@ -926,10 +927,12 @@ backup_originals() {
 		if [[ "$cur_nav" != "$no_nav" ]]; then
 			format_xml "$cur_nav"
 			sed -E "
-			s:href=[\"']:&$new_nav_dir/:g
+			s:(href=[\"'])([^#]):\1$new_nav_dir/\2:g
 			s:'\./:':g
 			s:(href=.*)(//):\1/:
-			s:\"\\./:\":g
+			s:href=[\"'][^'\"]*$(basename "$cur_nav")['\"]:href=\"$MERGED_NAV_FILE\":
+			s:\"\./:\":g
+			s#/[^/][^/]*/\.\./#/#g
 			" "$cur_nav" > ".epub-merge/$i.nav"
 		fi
 
