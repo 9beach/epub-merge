@@ -157,7 +157,9 @@ format_xml() {
 
 	case "$XML_FORMATTER" in
 		"xmllint")
-			xmllint --recover --format --noblanks "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+			xmllint --recover --format --noblanks "$file" \
+				> "${file}.tmp" \
+				&& mv "${file}.tmp" "$file"
 			;;
 		"python")
 			python3 -c "import xml.dom.minidom as x,sys; print(x.parseString(open(sys.argv[1]).read()).toprettyxml(indent='    '))" "$file" | grep -v "^ *$" > "${file}.tmp" && mv "${file}.tmp" "$file"
