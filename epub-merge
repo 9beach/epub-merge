@@ -950,6 +950,7 @@ consolidate_merged() {
 	find [0-9]* -type f \( \
 		-iname "*.ttf" -o -iname "*.otf" -o -iname "*.woff*" -o -iname "*.eot"  \) \
 		-exec mv {} fonts/ \; 2>/dev/null || true
+	rmdir fonts 2>/dev/null || true
 
 	# Remove unused
 	find [0-9]* \( -iname "META-INF" -o -iname "mimetype" \
@@ -1002,17 +1003,21 @@ create_final_epub() {
 	debug_func "$@"
 	local output_realpath="$1"
 	local working_dir="$2"
-	local font_dir="${3:-}"
+	local fonts_parent_dir="${3:-}"
 
 	# Package ePUB with proper compression
 	cd "$working_dir" > /dev/null
 	rm -f "$TEMP_EPUB"
 	zip -q -0 -X "$TEMP_EPUB" mimetype
 	zip -q -r "$TEMP_EPUB" . -x mimetype
-	if [[ -n "$font_dir" ]]; then
+
+	if [[ -n "$fonts_parent_dir" ]]; then
+		debug_var fonts_parent_dir
 		cd - > /dev/null
-		cd "$font_dir/" > /dev/null
-		zip -q -r "$TEMP_EPUB" "fonts/"
+		cd "$fonts_parent_dir/" > /dev/null
+		if [[ -d "$fonts_parent_dir/fonts" ]]; then
+			zip -q -r "$TEMP_EPUB" "fonts/"
+		fi
 		cd - > /dev/null
 	fi
 
@@ -1032,6 +1037,8 @@ create_individual_epubs() {
 	local count
 	local toc_file="toc.ncx"
 	local nav_file="nav.xhtml"
+
+	ls fonts/*.* 2>/dev/null | sort -V > .all-fonts-list 2>/dev/null || true
 
 	# shellcheck disable=SC2012
 	count="$(ls .epub-merge/[0-9]*.opf 2>/dev/null | wc -l)"
@@ -1053,9 +1060,28 @@ create_individual_epubs() {
 		[[ -f .epub-merge/"$i".ncx ]] && cp .epub-merge/"$i".ncx "$i/$toc_file"
 		[[ -f .epub-merge/"$i".nav ]] && cp .epub-merge/"$i".nav "$i/$nav_file"
 
-		if ! create_final_epub "$OUTPUT_DIR/$cur_epub" "$i/" "."; then
-			status=1
+		sed -n 's/.*href="\(fonts\/[^"]*\)".*/\1/p' "$i"/content.opf \
+			| sort -V > .fonts-list || true
+
+		local different_fonts=""
+
+		if ! diff .fonts-list .all-fonts-list >/dev/null 2>&1; then
+			different_fonts=1
 		fi
+
+		if [[ $different_fonts == 1 ]]; then
+			mkdir $i/fonts
+			sed "s#.*#cp \"&\" $i/fonts/#" .fonts-list | bash - 
+			if ! create_final_epub "$OUTPUT_DIR/$cur_epub" "$i/"; then
+				status=1
+			fi
+			rmdir fonts 2>/dev/null || true
+		else
+			if ! create_final_epub "$OUTPUT_DIR/$cur_epub" "$i/" "."; then
+				status=1
+			fi
+		fi
+
 		cd "$TEMP_DIR" > /dev/null
 	done
 
