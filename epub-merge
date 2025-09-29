@@ -127,7 +127,13 @@ debug_var() {
 }
 
 debug_func() {
-	debug "function: ${FUNCNAME[2]} / ${FUNCNAME[1]}$([ "${1:-}" != "$*" ] && echo " <- $*")"
+	if [ "${1:-}" != "$*" ]; then
+		local joined
+		joined=$(IFS=,; echo "$*")
+		debug "function: ${FUNCNAME[2]} / ${FUNCNAME[1]} ($joined)"
+	else
+		debug "function: ${FUNCNAME[2]} / ${FUNCNAME[1]}"
+	fi
 }
 
 error() {
@@ -143,6 +149,7 @@ XML_FORMATTER=""
 format_xml() {
 	debug_func "$@"
 	local file="$1"
+	local temp_xml="$TEMP_DIR/.xml.XXXXX"
 
 	if [[ -z "$XML_FORMATTER" ]]; then
 		if command -v xmllint &> /dev/null; then
@@ -158,11 +165,11 @@ format_xml() {
 	case "$XML_FORMATTER" in
 		"xmllint")
 			xmllint --recover --format --noblanks "$file" \
-				> "${file}.tmp" \
-				&& mv "${file}.tmp" "$file"
+				> "${temp_xml}" \
+				&& mv "${temp_xml}" "$file"
 			;;
-		"python")
-			python3 -c "import xml.dom.minidom as x,sys; print(x.parseString(open(sys.argv[1]).read()).toprettyxml(indent='    '))" "$file" | grep -v "^ *$" > "${file}.tmp" && mv "${file}.tmp" "$file"
+		"python3")
+			python3 -c "import xml.dom.minidom as x,sys; print(x.parseString(open(sys.argv[1]).read()).toprettyxml(indent='    '))" "$file" | grep -v "^ *$" > "${temp_xml}" && mv "${temp_xml}" "$file"
 			;;
 	esac
 }
@@ -199,10 +206,10 @@ get_xml_element() {
 	local pattern="$1"
 
 	sed -nE "
-	/<[^>]*${pattern}[^>]*>/ {
-		s#.*(<[^>]*${pattern}[^>]*>)#\1#p;
-		q
-	}" ${2:+"$2"}
+		/<[^>]*${pattern}[^>]*>/ {
+			s#.*(<[^>]*${pattern}[^>]*>)#\1#p;
+			q
+		}" ${2:+"$2"}
 }
 
 # Extract content between XML tags and modify paths/IDs
@@ -211,12 +218,12 @@ extract_and_modify_xml() {
 	local tag="$1" pattern="$2" dir="$3" suffix="$4"
 
 	sed -E "
-	/<${tag}[^>]*${pattern}[^>]*>/,/<\/${tag}/!d
-	/<\/?${tag}/d
-	/^$/d
-	s:(src|href)=\":&$dir/:g
-	s:(id|idref)=\"[^\"]*:&-${suffix}:g
-	" ${5:+"$5"}
+		/<${tag}[^>]*${pattern}[^>]*>/,/<\/${tag}/!d
+		/<\/?${tag}/d
+		/^$/d
+		s:(src|href)=\":&$dir/:g
+		s:(id|idref)=\"[^\"]*:&-${suffix}:g
+		" ${5:+"$5"}
 }
 
 # Extract content before specified tag
@@ -399,31 +406,6 @@ gen_opf_header() {
 
 	xml_grep_before_tag manifest "$opf_file" \
 		| modify_opf_metadata "$epub_title"
-}
-
-# Calculate relative path to root
-path_to_root() {
-	local parent
-	parent="$(dirname "$1" | sed -e 's:^\./::')"
-
-	if [ "$parent" = "." ]; then
-		echo "."
-	else
-		# shellcheck disable=SC2001
-		echo "$parent" | sed 's#[^/][^/]*#..#g'
-	fi
-}
-
-# Calculate relative path to trunk (one level below root)
-path_to_trunk() {
-	local parent
-	parent="$(dirname "$(dirname "$1" | sed -e 's:^\./::')")"
-
-	if [ "$parent" = "." ]; then
-		echo ""
-	else
-		echo "$parent/" | sed 's#[^/][^/]*#..#g'
-	fi
 }
 
 # Fix font paths for merged ePUB
@@ -960,6 +942,19 @@ consolidate_merged() {
 # Update CSS font URLs for merged ePUB
 # Merged, so one depth more
 fix_fontpaths_to_root() {
+	# Calculate relative path to root
+	path_to_root() {
+		local parent
+		parent="$(dirname "$1" | sed 's:^\./::')"
+
+		if [ "$parent" = "." ]; then
+			echo "."
+		else
+			# shellcheck disable=SC2001
+			echo "$parent" | sed 's#[^/][^/]*#..#g'
+		fi
+	}
+
 	local rpath
 	rpath="$(path_to_root "$1")"
 	sed -i '' -E "s#url[[:space:]]*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url(${rpath}/fonts/\\1)#i" "$1"
@@ -968,6 +963,19 @@ fix_fontpaths_to_root() {
 # Update CSS font URLs for split ePUBs
 # Trunk dirs(0, 1, 2, ...) are now root
 fix_fontpaths_to_trunk() {
+	# Calculate relative path to trunk (one level below root)
+	path_to_trunk() {
+		local parent
+		parent="$(dirname "$(dirname "$1" | sed -e 's:^\./::')")"
+
+		if [ "$parent" = "." ]; then
+			echo ""
+		else
+			echo "$parent/" | sed 's#[^/][^/]*#..#g'
+		fi
+	}
+
+
 	local rpath
 	rpath="$(path_to_trunk "$1")"
 	sed -i '' -E "s#url[[:space:]]*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url(${rpath}fonts/\\1)#i" "$1"
@@ -1031,7 +1039,7 @@ create_individual_epubs() {
 	local toc_file="toc.ncx"
 	local nav_file="nav.xhtml"
 
-	ls fonts/*.* 2>/dev/null | sort -V > .all-fonts-list 2>/dev/null || true
+	find fonts -type f | sort -V | sed 's#^..##' > .all-fonts-list 2>/dev/null || true
 
 	# shellcheck disable=SC2012
 	count="$(ls .epub-merge/[0-9]*.opf 2>/dev/null | wc -l)"
@@ -1063,7 +1071,7 @@ create_individual_epubs() {
 		fi
 
 		if [[ $different_fonts == 1 ]]; then
-			mkdir $i/fonts
+			mkdir "$i/fonts"
 			sed "s#.*#cp \"&\" $i/fonts/#" .fonts-list | bash - 
 			if ! create_final_epub "$OUTPUT_DIR/$cur_epub" "$i/"; then
 				status=1
