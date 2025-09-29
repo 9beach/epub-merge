@@ -518,10 +518,10 @@ extract_files() {
 }
 
 # Detect language from OPF content
+# # Detect language from OPF content
 detect_language() {
 	debug_func "$@"
-	local opf_file="$1"
-	local lang="$2"
+	local opf_file="$1" lang="$2"
 
 	if [[ -n "$lang" ]]; then
 		echo "$lang"
@@ -530,8 +530,7 @@ detect_language() {
 
 	# Extract language from metadata first
 	local lang_from_opf
-	lang_from_opf=$(grep -ho '<dc:language>.*</dc:language>' "$opf_file" \
-		2>/dev/null | sed 's/<[^>]*>//g' | head -1)
+	lang_from_opf=$(grep -ho -E -m1 '<dc:language>.*</dc:language>' "$opf_file" 2>/dev/null | sed 's/<[^>]*>//g')
 
 	if [[ -n "$lang_from_opf" ]]; then
 		echo "$lang_from_opf"
@@ -540,17 +539,17 @@ detect_language() {
 
 	debug "auto-detect language"
 
-	if grep -q '[가-힣]' "$opf_file" 2>/dev/null; then
-		echo "ko"
-	elif grep -q '[ぁ-ゟァ-ヿ]' "$opf_file" 2>/dev/null; then
-		echo "ja"
-	elif grep -q '[一-龯]' "$opf_file" 2>/dev/null; then
-		echo "zh"
-	elif grep -q '[А-Яа-яЁё]' "$opf_file" 2>/dev/null; then
-		echo "ru"
-	else
-		echo "en"
-	fi
+	# Detect language by character patterns in a single grep call
+	local char
+	char=$(grep -o -E -m1 '[가-힣]|[ぁ-ゟァ-ヿ]|[一-龯]|[А-Яа-яЁё]' \
+		"$opf_file" 2>/dev/null)
+	case "$char" in
+		[가-힣]*) echo "ko" ;;
+		[ぁ-ゟァ-ヿ]*) echo "ja" ;;
+		[一-龯]*) echo "zh" ;;
+		[А-Яа-яЁё]*) echo "ru" ;;
+		*) echo "en" ;;
+	esac
 }
 
 # Collect OPF/NCX/NAV file paths, and format XML
@@ -791,11 +790,10 @@ merge_navs() {
 
 	# Close NAV structure
 	echo -e '</ol></nav>\n</body>\n</html>' >> "$nav_file"
-	sed "
+	sed -i '' "
 		s:/\./:/:g
 		s#/[^/][^/]*/\.\./#/#g
-		" "$nav_file" \
-		> "$nav_file".tmp && mv "$nav_file".tmp "$nav_file"
+		" "$nav_file" "$nav_file"
 	format_xml "$nav_file"
 }
 
@@ -905,7 +903,6 @@ backup_originals() {
 		sed -E "
 			s:<(item|reference).*href=[\"']:&$new_opf_dir/:g
 			s:(<(item|reference).*href=.*)(//):\1/:
-			s:'\./:':g
 			s:\"\./:\":g
 			s:href=[\"'][^'\"]*\.ncx['\"]:href=\"toc.ncx\":
 			s:href=[\"'][^'\"]*$(basename "$cur_nav")['\"]:href=\"$MERGED_NAV_FILE\":
@@ -918,7 +915,6 @@ backup_originals() {
 			format_xml "$cur_ncx"
 			sed -E "
 			s:src=[\"']:&$new_ncx_dir/:g
-			s:'\./:':g
 			s:(src=.*)(//):\1/:
 			s:src=[\"'][^'\"]*$(basename "$cur_nav")['\"]:href=\"$MERGED_NAV_FILE\":
 			s:\"\./:\":g
@@ -930,7 +926,6 @@ backup_originals() {
 			format_xml "$cur_nav"
 			sed -E "
 			s:(href=[\"'])([^#]):\1$new_nav_dir/\2:g
-			s:'\./:':g
 			s:(href=.*)(//):\1/:
 			s:href=[\"'][^'\"]*$(basename "$cur_nav")['\"]:href=\"$MERGED_NAV_FILE\":
 			s:\"\./:\":g
@@ -967,7 +962,7 @@ consolidate_merged() {
 fix_fontpaths_to_root() {
 	local rpath
 	rpath="$(path_to_root "$1")"
-	sed -E "s#url[[:space:]]*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url(${rpath}/fonts/\\1)#i" "$1"
+	sed -i '' -E "s#url[[:space:]]*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url(${rpath}/fonts/\\1)#i" "$1"
 }
 
 # Update CSS font URLs for split ePUBs
@@ -975,16 +970,14 @@ fix_fontpaths_to_root() {
 fix_fontpaths_to_trunk() {
 	local rpath
 	rpath="$(path_to_trunk "$1")"
-	sed -E "s#url[[:space:]]*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url(${rpath}fonts/\\1)#i" "$1"
+	sed -i '' -E "s#url[[:space:]]*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url(${rpath}fonts/\\1)#i" "$1"
 }
 
 # Update CSS font URLs for split ePUB (digits/path -> ../fonts/)
 update_css_fonts_for_split() {
 	debug_func "*@"
 	find . -type f -iname "*.css" -print0 | while IFS= read -r -d '' css; do
-		fix_fontpaths_to_trunk "$css" \
-			> "$css.tmp" \
-			&& mv "$css.tmp" "$css"
+		fix_fontpaths_to_trunk "$css"
 	done
 }
 
@@ -994,9 +987,7 @@ update_css_fonts_for_merge() {
 	find . -type f -iname "*.css" -print0 | while IFS= read -r -d '' css; do
 		# New path from css to font is the concatenation of path from 
 		# css to altered root and altered font path (/fonts)
-		fix_fontpaths_to_root "$css" \
-			> "$css.tmp" \
-			&& mv "$css.tmp" "$css"
+		fix_fontpaths_to_root "$css"
 	done
 }
 
