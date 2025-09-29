@@ -192,12 +192,12 @@ get_xml_attr() {
 
 # Escape XML characters
 escape_xml() {
-	printf '%s' ${1:+"$1"} \
-		| sed -e 's/&/\&amp;/g' \
-			-e 's/</\&lt;/g' \
-			-e 's/>/\&gt;/g' \
-			-e 's/"/\&quot;/g' \
-			-e "s/'/\&apos;/g"
+	printf '%s' ${1:+"$1"} | sed \
+		-e 's/&/\&amp;/g' \
+		-e 's/</\&lt;/g' \
+		-e 's/>/\&gt;/g' \
+		-e 's/"/\&quot;/g' \
+		-e "s/'/\&apos;/g"
 }
 
 # Extract XML element by pattern
@@ -512,7 +512,9 @@ detect_language() {
 
 	# Extract language from metadata first
 	local lang_from_opf
-	lang_from_opf=$(grep -ho -E -m1 '<dc:language>.*</dc:language>' "$opf_file" 2>/dev/null | sed 's/<[^>]*>//g')
+	lang_from_opf=$(grep -ho -E -m1 '<dc:language>.*</dc:language>' \
+			"$opf_file" 2>/dev/null \
+		| sed 's/<[^>]*>//g')
 
 	if [[ -n "$lang_from_opf" ]]; then
 		echo "$lang_from_opf"
@@ -667,6 +669,8 @@ EOF
 	fi
 }
 
+readonly SED_REMOVE_DOT_PATH='s#(["/])\./#\1#g'
+readonly SED_REMOVE_DOTDOT_PATH="s#/[^/][^/]*/\.\./#/#g"
 readonly UUID_PATTERN='[0-9a-fA-F]\{8\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{12\}'
 
 merge_ncxs() {
@@ -707,9 +711,9 @@ merge_ncxs() {
 EOF
 
 		# Add volume link
-		get_xml_element \
-			'content[[:space:]]*src[[:space:]]*=' "$cur_ncx" \
-			| sed "s#[[:space:]]*src=[[:space:]]*.#&${cur_ncx_dir}/#" \
+		get_xml_element 'content[[:space:]]*src[[:space:]]*=' \
+				"$cur_ncx" \
+			| sed "s#[[:space:]]*src=[[:space:]]*.#&${cur_ncx_dir}/#"
 
 		# Merge navigation points
 		extract_and_modify_xml \
@@ -718,9 +722,9 @@ EOF
 		echo "  </navPoint>"
 	done \
 	| fix_playorder \
-	| sed '
-		s#/\./#/#g
-		s#/[^/][^/]*/\.\./#/#g' \
+	| sed -E "
+		$SED_REMOVE_DOT_PATH
+		$SED_REMOVE_DOTDOT_PATH" \
 	>> "$toc_file"
 
 	echo -e "  </navMap>\n</ncx>" >> "$toc_file"
@@ -772,9 +776,9 @@ merge_navs() {
 
 	# Close NAV structure
 	echo -e '</ol></nav>\n</body>\n</html>' >> "$nav_file"
-	sed -i '' "
-		s:/\./:/:g
-		s#/[^/][^/]*/\.\./#/#g
+	sed -E -i '' "
+		$SED_REMOVE_DOT_PATH
+		$SED_REMOVE_DOTDOT_PATH
 		" "$nav_file" "$nav_file"
 	format_xml "$nav_file"
 }
@@ -833,16 +837,16 @@ merge_opfs() {
 		cat "$spine_file"
 		echo -e "  </spine>\n</package>"
 	} \
-	| sed "
-		s:[\"']0/[^\"']*\.ncx['\"]:\"$MERGED_NCX_FILE\":
-		s:[\"']${FIRST_NCX_ID}-0[\"']:\"$MERGED_NCX_ID\":
-		s:['\"]${FIRST_NCX_ID}['\"]:\"$MERGED_NCX_ID\":
-		s#/[^/][^/]*/\.\./#/#g
-		s:/\./:/:" \
-	| fix_font_paths \
-	| filter_dups \
-	| grep -ivE '[0-9][0-9]*/.*\.(ncx|otf|ttf|woff|woff2|eot)' \
-	>> "content.opf"
+	| sed -E "
+		s:\"0/[^\"']*\.ncx\":\"$MERGED_NCX_FILE\":
+		s:\"${FIRST_NCX_ID}-0\":\"$MERGED_NCX_ID\":
+		s:\"${FIRST_NCX_ID}\":\"$MERGED_NCX_ID\":
+		$SED_REMOVE_DOTDOT_PATH
+		$SED_REMOVE_DOT_PATH" \
+		| fix_font_paths \
+		| filter_dups \
+		| grep -ivE '[0-9][0-9]*/.*\.(ncx|otf|ttf|woff|woff2|eot)' \
+		>> "content.opf"
 
 	to_nfc content.opf
 	format_xml content.opf
@@ -885,9 +889,9 @@ backup_originals() {
 		sed -E "
 			s:<(item|reference).*href=[\"']:&$new_opf_dir/:g
 			s:(<(item|reference).*href=.*)(//):\1/:
-			s:\"\./:\":g
-			s:href=[\"'][^'\"]*\.ncx['\"]:href=\"toc.ncx\":
-			s:href=[\"'][^'\"]*$(basename "$cur_nav")['\"]:href=\"$MERGED_NAV_FILE\":
+			$SED_REMOVE_DOT_PATH
+			s:href=\"[^\"]*\.ncx\":href=\"toc.ncx\":
+			s:href=\"[^\"]*$(basename "$cur_nav")\":href=\"$MERGED_NAV_FILE\":
 			s:[\"']${cur_ncx_id}[\"']:\"ncx\":" "$cur_opf" \
 			| fix_font_paths \
 			> ".epub-merge/$i.opf"
@@ -896,23 +900,23 @@ backup_originals() {
 		if [[ "$cur_ncx" != "$no_ncx" ]]; then
 			format_xml "$cur_ncx"
 			sed -E "
-			s:src=[\"']:&$new_ncx_dir/:g
-			s:(src=.*)(//):\1/:
-			s:src=[\"'][^'\"]*$(basename "$cur_nav")['\"]:href=\"$MERGED_NAV_FILE\":
-			s:\"\./:\":g
-			" "$cur_ncx" > ".epub-merge/$i.ncx"
+				s:src=\":&$new_ncx_dir/:g
+				s:(src=.*)(//):\1/:
+				s:src=\"[^\"]*$(basename "$cur_nav")\":href=\"$MERGED_NAV_FILE\":
+				$SED_REMOVE_DOT_PATH" "$cur_ncx" \
+				> ".epub-merge/$i.ncx"
 		fi
 
 		# NAV
 		if [[ "$cur_nav" != "$no_nav" ]]; then
 			format_xml "$cur_nav"
 			sed -E "
-			s:(href=[\"'])([^#]):\1$new_nav_dir/\2:g
-			s:(href=.*)(//):\1/:
-			s:href=[\"'][^'\"]*$(basename "$cur_nav")['\"]:href=\"$MERGED_NAV_FILE\":
-			s:\"\./:\":g
-			s#/[^/][^/]*/\.\./#/#g
-			" "$cur_nav" > ".epub-merge/$i.nav"
+				s:(href=\")([^#]):\1$new_nav_dir/\2:g
+				s:(href=.*)(//):\1/:
+				s:href=\"[^\"]*$(basename "$cur_nav")\":href=\"$MERGED_NAV_FILE\":
+				$SED_REMOVE_DOT_PATH
+				$SED_REMOVE_DOTDOT_PATH" "$cur_nav" \
+				> ".epub-merge/$i.nav"
 		fi
 
 		# Filename
