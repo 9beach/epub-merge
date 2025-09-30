@@ -81,4 +81,5 @@ fi
 rm "1st/META-INF/container.xml"
 rm "2nd/META-INF/container.xml"
 
-diff -r 1st 2nd || echo "┗━$1"
+echo " ┗━$1 ┉ $2"
+diff -r 1st 2nd

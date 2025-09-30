@@ -5,13 +5,15 @@
 
 set -euo pipefail
 
-sed_i() {
-	if [[ "$OSTYPE" == "darwin"* ]]; then
+if [[ "$OSTYPE" == "darwin"* ]]; then
+	sed_i() {
 		sed -i '' "$@"
-	else
+	}
+else
+	sed_i() {
 		sed -i "$@"
-	fi
-}
+	}
+fi
 
 # Error handler for ERR, INT, and TERM signals
 trap 'printf "\033[31mError (epub-merge): at line $LINENO\033[0m\n" >&2; \
@@ -153,34 +155,41 @@ error() {
 
 XML_FORMATTER=""
 
+if command -v xmllint &> /dev/null; then
+	XML_FORMATTER="xmllint"
+elif command -v python3 &> /dev/null; then
+	XML_FORMATTER="python3"
+else
+	XML_FORMATTER="cat"
+	log "The XML formatter is not installed, which may cause errors during the merge process. Please install xmllint."
+fi
+
 # Format XML/HTML file
-format_xml() {
-	debug_func "$@"
-	local file="$1"
-	local temp_xml="$TEMP_DIR/.xml.XXXXX"
-
-	if [[ -z "$XML_FORMATTER" ]]; then
-		if command -v xmllint &> /dev/null; then
-			XML_FORMATTER="xmllint"
-		elif command -v python3 &> /dev/null; then
-			XML_FORMATTER="python3"
-		else
-			XML_FORMATTER="cat"
-			log "The XML formatter is not installed, which may cause errors during the merge process. Please install xmllint."
-		fi
-	fi
-
-	case "$XML_FORMATTER" in
-		"xmllint")
-			xmllint --recover --format --noblanks "$file" \
-				> "${temp_xml}" \
-				&& mv "${temp_xml}" "$file"
-			;;
-		"python3")
-			python3 -c "import xml.dom.minidom as x,sys; print(x.parseString(open(sys.argv[1]).read()).toprettyxml(indent='    '))" "$file" | grep -v "^ *$" > "${temp_xml}" && mv "${temp_xml}" "$file"
-			;;
-	esac
-}
+if [[ "$XML_FORMATTER" == "xmllint" ]]; then
+	format_xml() {
+		debug_func "$@"
+		local file="$1"
+		local temp_xml="$TEMP_DIR/.xml.XXXXX"
+		xmllint --recover --format --noblanks "$file" \
+			> "${temp_xml}" 2>/dev/null \
+			&& mv "${temp_xml}" "$file"
+	}
+elif [[ "$XML_FORMATTER" == "python3" ]]; then
+	format_xml() {
+		debug_func "$@"
+		local file="$1"
+		local temp_xml="$TEMP_DIR/.xml.XXXXX"
+		python3 -c "import xml.dom.minidom as x,sys; print(x.parseString(open(sys.argv[1]).read()).toprettyxml(indent='    '))" "$file" 2>/dev/null \
+			| grep -v "^ *$" \
+			> "${temp_xml}" \
+			&& mv "${temp_xml}" "$file"
+	}
+else
+	format_xml() {
+		debug_func "$@"
+		log "XML formatter not available"
+	}
+fi
 
 # Split XML elements for easier processing
 split_xml() {
