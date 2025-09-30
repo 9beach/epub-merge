@@ -5,6 +5,14 @@
 
 set -euo pipefail
 
+sed_i() {
+	if [[ "$OSTYPE" == "darwin"* ]]; then
+		sed -i '' "$@"
+	else
+		sed -i "$@"
+	fi
+}
+
 # Error handler for ERR, INT, and TERM signals
 trap 'printf "\033[31mError (epub-merge): at line $LINENO\033[0m\n" >&2; \
 	cleanup' ERR INT TERM
@@ -776,7 +784,7 @@ merge_navs() {
 
 	# Close NAV structure
 	echo -e '</ol></nav>\n</body>\n</html>' >> "$nav_file"
-	sed -E -i '' "
+	sed_i -E "
 		$SED_REMOVE_DOT_PATH
 		$SED_REMOVE_DOTDOT_PATH
 		" "$nav_file" "$nav_file"
@@ -961,7 +969,7 @@ fix_fontpaths_to_root() {
 
 	local rpath
 	rpath="$(path_to_root "$1")"
-	sed -i '' -E "s#url[[:space:]]*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url(${rpath}/fonts/\\1)#i" "$1"
+	sed_i -E "s#url[[:space:]]*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url(${rpath}/fonts/\\1)#i" "$1"
 }
 
 # Update CSS font URLs for split ePUBs
@@ -982,7 +990,7 @@ fix_fontpaths_to_trunk() {
 
 	local rpath
 	rpath="$(path_to_trunk "$1")"
-	sed -i '' -E "s#url[[:space:]]*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url(${rpath}fonts/\\1)#i" "$1"
+	sed_i -E "s#url[[:space:]]*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url(${rpath}fonts/\\1)#i" "$1"
 }
 
 # Update CSS font URLs for split ePUB (digits/path -> ../fonts/)
