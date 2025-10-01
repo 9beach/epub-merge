@@ -76,6 +76,9 @@ OPTIONS
      -q             Suppress progress messages
      -s suffix      Add suffix to TOC volume labels
      -t name        Set custom title
+     -v labels      Set custom TOC volume labels for each volume.
+                    Labels must be separated by semicolons (;).
+                    (e.g., "Love;Peace;Hate")
      -x             Extraction mode: split merged ePUB back into original files
 
 EXAMPLES

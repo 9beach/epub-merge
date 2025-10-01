@@ -53,7 +53,11 @@ OPTIONS
      -q             Suppress progress messages
      -s suffix      Add suffix to TOC volume labels
      -t name        Set custom title
+     -v labels      Set custom TOC volume labels for each volume.
+                    Labels must be separated by semicolons (;).
+                    (e.g., "Love;Peace;Hate")
      -x             Extraction mode: split merged ePUB back into original files
+
 
 EXAMPLES
      epub-merge love-10.epub love-8.epub love-9.epub
@@ -102,7 +106,8 @@ TEMP_EPUB=""
 OVERWRITE_EXISTING=""
 TOC_VOLUME_PREFIX=""
 TOC_VOLUME_SUFFIX=""
-TOC_VOLUME_LABELS_GIVEN=""
+TOC_VOLUME_PREFIX_SUFFIX_GIVEN=""
+TOC_VOLUME_LABELS=()
 EPUB_NAME="" 
 EPUB_TITLE=""
 EPUB_LANG=""
@@ -433,17 +438,23 @@ fix_font_paths() {
 # --- Command line parsing and validation
 # Writes: many variables
 parse_args() {
-	while getopts "n:t:l:p:s:d:fOqx" opt; do
+	while getopts "n:t:l:p:v:s:d:fOqx" opt; do
 		case "$opt" in
 			f) OVERWRITE_EXISTING=1 ;;
 			d) OUTPUT_DIR="$(realpath "$OPTARG")" ;;
 			n) EPUB_NAME="$OPTARG" ;;
+			v)
+				IFS=';' read -a _labels <<< "$OPTARG"
+				for l in "${_labels[@]}"; do
+					TOC_VOLUME_LABELS+=("$l")
+				done
+				;;
 			t) EPUB_TITLE="$(escape_xml "$OPTARG")" ;;
 			l) EPUB_LANG="$OPTARG" ;;
 			p) TOC_VOLUME_PREFIX="$(escape_xml "$OPTARG")"
-			   TOC_VOLUME_LABELS_GIVEN=1 ;;
+			   TOC_VOLUME_PREFIX_SUFFIX_GIVEN=1 ;;
 			s) TOC_VOLUME_SUFFIX="$(escape_xml "$OPTARG")"
-			   TOC_VOLUME_LABELS_GIVEN=1 ;;
+			   TOC_VOLUME_PREFIX_SUFFIX_GIVEN=1 ;;
 			O) DO_NOT_SORT_PARAMS=1 ;;
 			q) QUIET=1 ;;
 			x) EXTRACT_MODE=1 ;;
@@ -456,7 +467,7 @@ parse_args() {
 	readonly DO_NOT_SORT_PARAMS
 	readonly QUIET
 	readonly EXTRACT_MODE
-	readonly TOC_VOLUME_LABELS_GIVEN
+	readonly TOC_VOLUME_PREFIX_SUFFIX_GIVEN
 }
 
 validate_args() {
@@ -620,7 +631,7 @@ detect_volume_labels() {
 	local prefix="$TOC_VOLUME_PREFIX"
 	local suffix="$TOC_VOLUME_SUFFIX"
 
-	if [[ -n "$TOC_VOLUME_LABELS_GIVEN" ]]; then
+	if [[ -n "$TOC_VOLUME_PREFIX_SUFFIX_GIVEN" ]]; then
 		return
 	fi
 
@@ -717,12 +728,17 @@ merge_ncxs() {
 		cur_ncx_dir="$(dirname "$cur_ncx")"
 		volume_num=$((i + 1))
 
+		if [[ -n "${TOC_VOLUME_LABELS[i]:-}" ]]; then
+			local label="${TOC_VOLUME_LABELS[i]}"
+		else
+			local label="$prefix$volume_num$suffix"
+		fi
 		# Add volume entry
 		# shellcheck disable=SC2129
 		cat << EOF
   <navPoint id="volume-$i" playOrder="1">
     <navLabel>
-      <text>$prefix$volume_num$suffix</text>
+      <text>$label</text>
     </navLabel>
 EOF
 
@@ -780,8 +796,14 @@ merge_navs() {
 		volume_num=$((i + 1))
 
 		ref="$cur_nav_dir/$(get_xml_attr "a[[:space:]]*href" "href" "$cur_nav")"
+		if [[ -n "${TOC_VOLUME_LABELS[i]:-}" ]]; then
+			local label="${TOC_VOLUME_LABELS[i]}"
+		else
+			local label="$prefix$volume_num$suffix"
+		fi
+
 		# Add volume entry and link
-		echo "<li style='list-style: none !important; margin: 0 !important; padding: 0 !important;' id=\"vol-$i=\"><a href=\"$ref\">$prefix$volume_num$suffix</a></li>"
+		echo "<li style='list-style: none !important; margin: 0 !important; padding: 0 !important;' id=\"vol-$i=\"><a href=\"$ref\">$label</a></li>"
 
 		# Merge navigation points
 		debug_var cur_nav_dir
@@ -1029,8 +1051,8 @@ create_final_epub() {
 	# Package ePUB with proper compression
 	cd "$working_dir" > /dev/null
 	rm -f "$TEMP_EPUB"
-	zip -q -0 -X "$TEMP_EPUB" mimetype
-	zip -q -r "$TEMP_EPUB" . -x mimetype
+	zip -q -X0 "$TEMP_EPUB" mimetype
+	zip -q -Xr9D "$TEMP_EPUB" . -x mimetype -x "*/.DS_Store" -x "__MACOSX/*"
 
 	if [[ -n "$fonts_parent_dir" ]]; then
 		debug_var fonts_parent_dir

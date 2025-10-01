@@ -79,7 +79,9 @@ if [[ -z "${EPUB_DIFF_COMPARE_UUID:-}" ]]; then
 fi
 
 rm "1st/META-INF/container.xml"
+rmdir "1st/fonts" 2> /dev/null || true
 rm "2nd/META-INF/container.xml"
+rmdir "2nd/fonts" 2> /dev/null|| true
 
 echo " ┗━$1 ┉ $2"
 diff -r 1st 2nd
