@@ -201,7 +201,7 @@ get_xml_attr() {
 	debug_func "$@"
 	local pattern="$1" attr="$2"
 
-	sed -nE "\|<[^>]*${pattern}[^>]*>| {
+	sed -nE "\|${pattern}| {
 		s|.*${attr}=[\"']([^\"']*)[\"'].*|\1|p;
 		q
 	}" ${3:+"$3"}
@@ -294,7 +294,6 @@ filter_dups() {
 get_version() {
 	local epub="$1" opf_path
 	opf_path="$(unzip -p "$epub" META-INF/container.xml \
-		| split_xml \
 		| get_xml_attr full-path full-path)"
 
 	debug_var epub
@@ -304,7 +303,7 @@ get_version() {
 
 	unzip -p "$epub" "$opf_path" \
 		| split_xml \
-		| get_xml_attr 'package.*xmlns' version
+		| get_xml_attr 'package.*version' version
 }
 
 # Check system dependencies
