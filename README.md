@@ -58,48 +58,77 @@ sudo chmod a+rx /usr/local/bin/epub-merge
 
 ```
 NAME
-     epub-merge - combines multiple ePUB files into a single volume, or
-     extracts merged ePUB
+     epub-merge -- merge multiple ePUB files into one or extract merged ePUB
 
 SYNOPSIS
-     epub-merge [OPTIONS] epub1 epub2 [epub3 ...]
-     epub-merge -x merged-epub
+     epub-merge [-fOq] [-d directory] [-l lang] [-p prefix] [-s suffix]
+                [-t title] [-v labels] file ...
+     epub-merge -x file
 
-OPTIONS
-     -d directory   Output directory for the generated ePUB files
-                    (default: current directory)
-     -f             Overwrite existing ePUB files with the same name
-     -l lang        Specify language code (ko, en, ja, zh, ru, etc.)
-     -n name        Set custom output filename (without extension)
-     -O             Disable natural sorting of input files
-     -p prefix      Add prefix to TOC volume labels
-     -q             Suppress progress messages
-     -s suffix      Add suffix to TOC volume labels
-     -t name        Set custom title
-     -v labels      Set custom TOC volume labels for each volume.
-                    Labels must be separated by semicolons (;).
-                    (e.g., "Love;Peace;Hate")
-     -x             Extraction mode: split merged ePUB back into original files
+DESCRIPTION
+     The epub-merge utility combines multiple ePUB files into a single volume
+     or extracts a previously merged ePUB back into its original components.
+
+     The options are as follows:
+
+     -d directory
+             Specify the output directory for generated ePUB files.  The
+             default is the current directory.
+
+     -f      Force overwrite of existing files with the same name.
+
+     -l lang
+             Specify the language code for the merged ePUB (e.g., ko, en, ja,
+             zh, ru).
+
+     -O      Disable natural sorting of input files.
+
+     -p prefix
+             Add a prefix to table of contents volume labels.
+
+     -q      Quiet mode.  Suppress progress messages.
+
+     -s suffix
+             Add a suffix to table of contents volume labels.
+             Set a custom title for the merged ePUB.  This title is also used
+             as the output filename.
+
+     -v labels
+             Set custom table of contents volume labels for each volume.
+             Labels must be separated by semicolons, for example:
+             "Love;Peace;Hate".
+
+     -x      Extraction mode.  Split a merged ePUB back into its original
+             component files.
 
 EXAMPLES
-     epub-merge love-10.epub love-8.epub love-9.epub
-          extracting love-8.epub
-          extracting love-9.epub
-          extracting love-10.epub
-          love.epub: successfully created
+     Merge three ePUB files with natural sorting (default):
 
-     epub-merge -x love.epub
-          love-8.epub: successfully created
-          love-9.epub: successfully created
-          love-10.epub: successfully created
+           $ epub-merge love-10.epub love-8.epub love-9.epub
+           extracting love-8.epub
+           extracting love-9.epub
+           extracting love-10.epub
+           love.epub: successfully created
 
-     epub-merge -O love-10.epub love-8.epub love-9.epub
-          extracting love-10.epub
-          extracting love-8.epub
-          extracting love-9.epub
-          love.epub: successfully created
+     Extract a merged ePUB back into original files:
 
-     epub-merge -n "One Thousand and One Nights" ../1001-nights*.epub
-          ...
-          One Thousand and One Nights.epub: successfully created
+           $ epub-merge -x love.epub
+           love-8.epub: successfully created
+           love-9.epub: successfully created
+           love-10.epub: successfully created
+
+     Merge files in the order specified (disable natural sorting):
+
+           $ epub-merge -O love-10.epub love-8.epub love-9.epub
+           extracting love-10.epub
+           extracting love-8.epub
+           extracting love-9.epub
+
+     Merge with custom title and filename:
+
+           $ epub-merge -t "Arabian Nights: Tales of 1,001 Nights" a?.epub
+           Extracting a1.epub
+           Extracting a2.epub
+           Extracting a3.epub
+           Arabian Nights_ Tales of 1,001 Nights.epub: successfully created
 ```

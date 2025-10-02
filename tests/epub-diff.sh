@@ -14,46 +14,65 @@ cleanup() {
 
 trap cleanup EXIT
 
+if [[ "$OSTYPE" == "darwin"* ]]; then
+	sed_i() {
+		sed -i '' "$@"
+	}
+else
+	sed_i() {
+		sed -i "$@"
+	}
+fi
+
 XML_FORMATTER=""
 
+if command -v xmllint &> /dev/null; then
+	XML_FORMATTER="xmllint"
+elif command -v python3 &> /dev/null; then
+	XML_FORMATTER="python3"
+else
+	XML_FORMATTER="cat"
+	log "The XML formatter is not installed, which may cause errors during the merge process. Please install xmllint."
+fi
+
 # Format XML/HTML file
-format_xml() {
-	local file="$1"
+if [[ "$XML_FORMATTER" == "xmllint" ]]; then
+	format_xml() {
+		local file="$1"
+		local temp_xml="$TEMP_DIR/.xml.XXXXX"
+		xmllint --recover --format --noblanks "$file" \
+			> "${temp_xml}" 2>/dev/null \
+			&& mv "${temp_xml}" "$file"
+		}
+elif [[ "$XML_FORMATTER" == "python3" ]]; then
+	format_xml() {
+		debug_func "$@"
+		local file="$1"
+		local temp_xml="$TEMP_DIR/.xml.XXXXX"
+		python3 -c "import xml.dom.minidom as x,sys; print(x.parseString(open(sys.argv[1]).read()).toprettyxml(indent='    '))" "$file" 2>/dev/null \
+			| grep -v "^ *$" \
+			> "${temp_xml}" \
+			&& mv "${temp_xml}" "$file"
+		}
+else
+	format_xml() {
+		debug_func "$@"
+		log "XML formatter not available"
+	}
+fi
 
-	if [[ -z "$XML_FORMATTER" ]]; then
-		if command -v xmllint &> /dev/null; then
-			XML_FORMATTER="xmllint"
-		elif command -v python3 &> /dev/null; then
-			XML_FORMATTER="python3"
-		else
-			XML_FORMATTER="cat"
-			log "The XML formatter is not installed, which may cause errors during the merge process. Please install xmllint."
-		fi
-	fi
-
-	case "$XML_FORMATTER" in
-		"xmllint")
-			xmllint --recover --format "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
-			;;
-		"python")
-			python3 -c "import xml.dom.minidom as x,sys; print(x.parseString(open(sys.argv[1]).read()).toprettyxml(indent='    '))" "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
-			;;
-	esac
-}
+readonly UUID='[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}'
 
 filter_uuid() {
-	local uuid='[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}'
 	if  [[ -f "$1" ]]; then
-		sed -E -e 's/^[[:space:]]+//' -e 's/[[:space:]]+$//' "$1" \
-			| tr -d '\r' \
-			| grep -Ev "($uuid|^[[:space:]]*$)" \
+		grep -Ev "($UUID|^[[:space:]]*$)" "$1" \
 			> "$1.no-uuid" || true
 		mv "$1.no-uuid" "$1"
-		format_xml "$1"
 	fi
 }
 
 TEMP_DIR=$(mktemp -d)
+readonly TEMP_DIR
 
 mkdir "$TEMP_DIR/1st"
 mkdir "$TEMP_DIR/2nd"
@@ -83,5 +102,4 @@ rmdir "1st/fonts" 2> /dev/null || true
 rm "2nd/META-INF/container.xml"
 rmdir "2nd/fonts" 2> /dev/null|| true
 
-echo " ┗━$1 ┉ $2"
 diff -r 1st 2nd

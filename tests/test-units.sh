@@ -25,6 +25,14 @@ TEMP_DIR="$(mktemp -d)"
 
 cd "$TEMP_DIR"
 
+escaped="$(escape_xml "<<hello&&")"
+assert_eq "$escaped" '\&lt;\&lt;hello\&amp;\&amp;'
+
+escaped="$(escape_xml "<<hello&&>>")"
+assert_eq "$escaped" '\&lt;\&lt;hello\&amp;\&amp;\&gt;\&gt;'
+
+exit
+
 # path_to_root
 assert_eq "$(path_to_root "a.txt")" "."
 assert_eq "$(path_to_root "a/b/c.txt")" "../.."
@@ -50,24 +58,28 @@ assert_eq "$(get_version "$EPUB_MERGE_DIR/tests/samples/original/sample1.epub")"
 xml='<title>Navigation</title><nav epub:type="toc"><li><a href="OEBPS/...'
 assert_eq "$(echo "$xml" | split_xml | get_xml_attr "nav ep" "epub:type")" "toc"
 
-css_path="EPUB/styles/layout.css"
-css="test url(../../rc/xx.ttf)\nhahaha url ('../../fonts/myfont.otf')"
-
 mkdir -p "a/b/c/"
 
-echo "src: url(../../../../my-font-dir/KoPubDotumMedium.ttf);" >> "a/b/c/d.css"
-echo "src: url(../../../my-rc-dir/KoPubDotumBold.otf);" >> "a/b/c/d.css"
+{
+	echo "src: url(../../../../my-font-dir/KoPubDotumMedium.ttf);"
+	echo "src: url(../../../my-rc-dir/KoPubDotumBold.otf);"
+} > "a/b/c/root.css"
+cp  "a/b/c/root.css"  "a/b/c/trunk.css"
 
-echo "src: url(../../../fonts/KoPubDotumMedium.ttf);" >> root
-echo "src: url(../../../fonts/KoPubDotumBold.otf);" >> root
+{
+	echo "src: url(../../../fonts/KoPubDotumMedium.ttf);"
+	echo "src: url(../../../fonts/KoPubDotumBold.otf);"
+} > root.expected
 
-echo "src: url(../../fonts/KoPubDotumMedium.ttf);" >> trunk
-echo "src: url(../../fonts/KoPubDotumBold.otf);" >> trunk
+{
+	echo "src: url(../../fonts/KoPubDotumMedium.ttf);"
+	echo "src: url(../../fonts/KoPubDotumBold.otf);"
+} > trunk.expected
 
-fix_fontpaths_to_root "a/b/c/d.css" > root.out
-fix_fontpaths_to_trunk "a/b/c/d.css" > trunk.out
+fix_fontpaths_to_root "a/b/c/root.css"
+fix_fontpaths_to_trunk "a/b/c/trunk.css"
 
-diff root root.out
-diff trunk trunk.out
+diff root.expected a/b/c/root.css
+diff trunk.expected a/b/c/trunk.css
 
 assert_summary

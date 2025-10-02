@@ -35,51 +35,82 @@ trap cleanup EXIT
 show_usage() {
 	cat >&2 << 'EOF'
 NAME
-     epub-merge - combines multiple ePUB files into a single volume, or 
-     extracts merged ePUB
+     epub-merge -- merge multiple ePUB files into one or extract merged ePUB
 
 SYNOPSIS
-     epub-merge [OPTIONS] epub1 epub2 [epub3 ...]
-     epub-merge -x merged-epub
+     epub-merge [-fOq] [-d directory] [-l lang] [-p prefix] [-s suffix]
+                [-t title] [-v labels] file ...
+     epub-merge -x file
 
-OPTIONS
-     -d directory   Output directory for the generated ePUB files
-                    (default: current directory)
-     -f             Overwrite existing ePUB files with the same name
-     -l lang        Specify language code (ko, en, ja, zh, ru, etc.)
-     -n name        Set custom output filename (without extension)
-     -O             Disable natural sorting of input files
-     -p prefix      Add prefix to TOC volume labels
-     -q             Suppress progress messages
-     -s suffix      Add suffix to TOC volume labels
-     -t name        Set custom title
-     -v labels      Set custom TOC volume labels for each volume.
-                    Labels must be separated by semicolons (;).
-                    (e.g., "Love;Peace;Hate")
-     -x             Extraction mode: split merged ePUB back into original files
+DESCRIPTION
+     The epub-merge utility combines multiple ePUB files into a single volume
+     or extracts a previously merged ePUB back into its original components.
 
+     The options are as follows:
+
+     -d directory
+             Specify the output directory for generated ePUB files.  The
+             default is the current directory.
+
+     -f      Force overwrite of existing files with the same name.
+
+     -l lang
+             Specify the language code for the merged ePUB (e.g., ko, en, ja,
+             zh, ru).
+
+     -O      Disable natural sorting of input files.
+
+     -p prefix
+             Add a prefix to table of contents volume labels.
+
+     -q      Quiet mode.  Suppress progress messages.
+
+     -s suffix
+             Add a suffix to table of contents volume labels.
+
+     -t title
+             Set a custom title for the merged ePUB.  This title is also used
+             as the output filename.
+
+     -v labels
+             Set custom table of contents volume labels for each volume.
+             Labels must be separated by semicolons, for example:
+             "Love;Peace;Hate".
+
+     -x      Extraction mode.  Split a merged ePUB back into its original
+             component files.
 
 EXAMPLES
-     epub-merge love-10.epub love-8.epub love-9.epub
-          extracting love-8.epub
-          extracting love-9.epub
-          extracting love-10.epub
-          love.epub: successfully created
+     Merge three ePUB files with natural sorting (default):
 
-     epub-merge -x love.epub
-          love-8.epub: successfully created
-          love-9.epub: successfully created
-          love-10.epub: successfully created
+           $ epub-merge love-10.epub love-8.epub love-9.epub
+           extracting love-8.epub
+           extracting love-9.epub
+           extracting love-10.epub
+           love.epub: successfully created
 
-     epub-merge -O love-10.epub love-8.epub love-9.epub
-          extracting love-10.epub
-          extracting love-8.epub
-          extracting love-9.epub
-          love.epub: successfully created
+     Extract a merged ePUB back into original files:
 
-     epub-merge -n "One Thousand and One Nights" ../1001-nights*.epub
-          ...
-          One Thousand and One Nights.epub: successfully created
+           $ epub-merge -x love.epub
+           love-8.epub: successfully created
+           love-9.epub: successfully created
+           love-10.epub: successfully created
+
+     Merge files in the order specified (disable natural sorting):
+
+           $ epub-merge -O love-10.epub love-8.epub love-9.epub
+           extracting love-10.epub
+           extracting love-8.epub
+           extracting love-9.epub
+           love.epub: successfully created
+
+     Merge with custom title and filename:
+
+           $ epub-merge -t "Arabian Nights: Tales of 1,001 Nights" a?.epub
+           Extracting a1.epub
+           Extracting a2.epub
+           Extracting a3.epub
+           Arabian Nights_ Tales of 1,001 Nights.epub: successfully created
 EOF
 }
 
@@ -172,7 +203,6 @@ fi
 # Format XML/HTML file
 if [[ "$XML_FORMATTER" == "xmllint" ]]; then
 	format_xml() {
-		debug_func "$@"
 		local file="$1"
 		local temp_xml="$TEMP_DIR/.xml.XXXXX"
 		xmllint --recover --format --noblanks "$file" \
@@ -181,7 +211,6 @@ if [[ "$XML_FORMATTER" == "xmllint" ]]; then
 	}
 elif [[ "$XML_FORMATTER" == "python3" ]]; then
 	format_xml() {
-		debug_func "$@"
 		local file="$1"
 		local temp_xml="$TEMP_DIR/.xml.XXXXX"
 		python3 -c "import xml.dom.minidom as x,sys; print(x.parseString(open(sys.argv[1]).read()).toprettyxml(indent='    '))" "$file" 2>/dev/null \
@@ -191,7 +220,6 @@ elif [[ "$XML_FORMATTER" == "python3" ]]; then
 	}
 else
 	format_xml() {
-		debug_func "$@"
 		log "XML formatter not available"
 	}
 fi
@@ -213,6 +241,18 @@ get_xml_attr() {
 }
 
 # Escape XML characters
+escape_xml_for_sed() {
+	# Safe for `sed` replacement strings
+	printf '%s' "${1-}" | sed \
+		-e 's/\\/\\\\/g' \
+		-e 's/&/\\\&amp;/g' \
+		-e 's/</\\\&lt;/g' \
+		-e 's/>/\\\&gt;/g' \
+		-e 's/"/\\\&quot;/g' \
+		-e "s/'/\\\&apos;/g" \
+		-e 's/\//\\\//g'
+}
+
 escape_xml() {
 	printf '%s' ${1:+"$1"} | sed \
 		-e 's/&/\&amp;/g' \
@@ -220,6 +260,7 @@ escape_xml() {
 		-e 's/>/\&gt;/g' \
 		-e 's/"/\&quot;/g' \
 		-e "s/'/\&apos;/g"
+
 }
 
 # Extract XML element by pattern
@@ -262,15 +303,16 @@ modify_opf_metadata() {
 	local epub_title="$1"
 	sed -E "
 		s|(<dc:title[^>]*>).*</dc:title>|\1$epub_title</dc:title>|
-		s|[[:space:]]*name[^>]*cover[^>]*[[:space:]]content=[\"'][^\"']*|&-0|" \
+		/name=\"cover\"/s|content=\"[^\"]*|&-0|
+		" \
 		| grep -viE 'calibre:(series|title_sort)'
 }
 
 # Remove duplicate manifest font items from stdin (keep first occurrence only)
 filter_dups() {
 	awk '
-	/<manifest>/ { in_manifest = 1 }
-	/<\/manifest>/ { in_manifest = 0; print; next }
+	/<manifest/ { in_manifest = 1 }
+	/<\/manifest/ { in_manifest = 0; print; next }
 
 	in_manifest && /<item[^>]*href=/ {
 		if (match($0, /href=["'\'']([^"'\'']*)["'\'']/)) {
@@ -435,6 +477,10 @@ fix_font_paths() {
 	sed -E 's#href=["'"'"'].*/[^"'"'"']*/([^/]+\.(ttf|otf|woff|woff2|eot))["'"'"']#href="fonts/\1"#gi'
 }
 
+safe_filename() {
+	echo "$1" | tr '/:*?<>|"\\' '_'
+}
+
 # --- Command line parsing and validation
 # Writes: many variables
 parse_args() {
@@ -449,11 +495,11 @@ parse_args() {
 					TOC_VOLUME_LABELS+=("$l")
 				done
 				;;
-			t) EPUB_TITLE="$(escape_xml "$OPTARG")" ;;
+			t) EPUB_TITLE="$OPTARG" ;;
 			l) EPUB_LANG="$OPTARG" ;;
-			p) TOC_VOLUME_PREFIX="$(escape_xml "$OPTARG")"
+			p) TOC_VOLUME_PREFIX="$OPTARG"
 			   TOC_VOLUME_PREFIX_SUFFIX_GIVEN=1 ;;
-			s) TOC_VOLUME_SUFFIX="$(escape_xml "$OPTARG")"
+			s) TOC_VOLUME_SUFFIX="$OPTARG"
 			   TOC_VOLUME_PREFIX_SUFFIX_GIVEN=1 ;;
 			O) DO_NOT_SORT_PARAMS=1 ;;
 			q) QUIET=1 ;;
@@ -488,6 +534,7 @@ validate_args() {
 
 # Generate output filename and title from input files
 gen_output_names() {
+	EPUB_NAME="${EPUB_TITLE:-$EPUB_NAME}"
 	if [[ -z "$EPUB_NAME" ]]; then
 		EPUB_NAME="$(get_prefix "$(basename "$1")" "$(basename "$2")")"
 	fi
@@ -496,11 +543,14 @@ gen_output_names() {
 		error "Cannot determine output name from '$1' and '$2'.\nPlease use -n option"
 	fi
 
+	EPUB_TITLE="${EPUB_TITLE:-$EPUB_NAME}"
+
+	EPUB_NAME="$(safe_filename "$EPUB_NAME")"
+	EPUB_TITLE="$(escape_xml_for_sed "$EPUB_TITLE")"
+
 	if [[ $OVERWRITE_EXISTING != 1 && -f "$EPUB_NAME.epub" ]]; then
 		error "$EPUB_NAME.epub: already exists"
 	fi
-
-	EPUB_TITLE="${EPUB_TITLE:-$EPUB_NAME}"
 }
 
 # Sort input files naturally unless disabled
@@ -738,7 +788,7 @@ merge_ncxs() {
 		cat << EOF
   <navPoint id="volume-$i" playOrder="1">
     <navLabel>
-      <text>$label</text>
+      <text>$(escape_xml "$label")</text>
     </navLabel>
 EOF
 
@@ -803,7 +853,7 @@ merge_navs() {
 		fi
 
 		# Add volume entry and link
-		echo "<li style='list-style: none !important; margin: 0 !important; padding: 0 !important;' id=\"vol-$i=\"><a href=\"$ref\">$label</a></li>"
+		echo "<li style='list-style: none !important; margin: 0 !important; padding: 0 !important;' id=\"vol-$i=\"><a href=\"$ref\">$(escape_xml "$label")</a></li>"
 
 		# Merge navigation points
 		debug_var cur_nav_dir
@@ -963,7 +1013,7 @@ backup_originals() {
 	done
 }
 
-# Consolidate merged archive, and remove unused
+# Consolidate merged archive, and remove unused consolidate_merged() {
 consolidate_merged() {
 	debug_func "*@"
 	# Move all font files to central location
@@ -981,43 +1031,42 @@ consolidate_merged() {
 	find [0-9]* -type d -empty -delete || true
 }
 
+# Calculate relative path to root
+path_to_root() {
+	local parent
+	parent="$(dirname "$1" | sed 's:^\./::')"
+
+	if [ "$parent" = "." ]; then
+		echo "."
+	else
+		# shellcheck disable=SC2001
+		echo "$parent" | sed 's#[^/][^/]*#..#g'
+	fi
+}
+
 # Update CSS font URLs for merged ePUB
 # Merged, so one depth more
 fix_fontpaths_to_root() {
-	# Calculate relative path to root
-	path_to_root() {
-		local parent
-		parent="$(dirname "$1" | sed 's:^\./::')"
-
-		if [ "$parent" = "." ]; then
-			echo "."
-		else
-			# shellcheck disable=SC2001
-			echo "$parent" | sed 's#[^/][^/]*#..#g'
-		fi
-	}
-
 	local rpath
 	rpath="$(path_to_root "$1")"
 	sed_i -E "s#url[[:space:]]*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url(${rpath}/fonts/\\1)#i" "$1"
 }
 
+# Calculate relative path to trunk (one level below root)
+path_to_trunk() {
+	local parent
+	parent="$(dirname "$(dirname "$1" | sed -e 's:^\./::')")"
+
+	if [ "$parent" = "." ]; then
+		echo ""
+	else
+		echo "$parent/" | sed 's#[^/][^/]*#..#g'
+	fi
+}
+
 # Update CSS font URLs for split ePUBs
 # Trunk dirs(0, 1, 2, ...) are now root
 fix_fontpaths_to_trunk() {
-	# Calculate relative path to trunk (one level below root)
-	path_to_trunk() {
-		local parent
-		parent="$(dirname "$(dirname "$1" | sed -e 's:^\./::')")"
-
-		if [ "$parent" = "." ]; then
-			echo ""
-		else
-			echo "$parent/" | sed 's#[^/][^/]*#..#g'
-		fi
-	}
-
-
 	local rpath
 	rpath="$(path_to_trunk "$1")"
 	sed_i -E "s#url[[:space:]]*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url(${rpath}fonts/\\1)#i" "$1"
@@ -1031,7 +1080,7 @@ update_css_fonts_for_split() {
 	done
 }
 
-# Update CSS font URLs for merged ePUB (css -> fonts/)
+# Update CSS font URLs for merged ePUB (paths -> fonts/)
 update_css_fonts_for_merge() {
 	debug_func "*@"
 	find . -type f -iname "*.css" -print0 | while IFS= read -r -d '' css; do

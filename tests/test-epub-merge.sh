@@ -14,6 +14,7 @@ cleanup() {
 trap cleanup EXIT
 
 epub_diff() {
+	echo "│   ↳ $1 ── $2"
 	"$EPUB_MERGE_DIR/tests/epub-diff.sh" "$@"
 }
 
@@ -31,18 +32,18 @@ TEMP_DIR="$(mktemp -d)"
 for dir in "samples" "samples-v3"; do
 	SAMPLE_DIR="$EPUB_MERGE_DIR/tests/$dir"
 
-	echo ++ "epub-merge test: $dir"
+	echo ├── "epub-merge test: $dir"
 
 	########
 
-	echo ++ epub-merge test: setup
+	echo ├── epub-merge test: setup
 
 	rsync -a --delete "$SAMPLE_DIR/" "$TEMP_DIR"
 
 	########
 
 	tcd .merged
-	echo ++ epub-merge test: merge original
+	echo ├── epub-merge test: merge original
 
 	# shellcheck disable=SC2012
 	epub_merge -q ../original/*.epub
@@ -52,7 +53,7 @@ for dir in "samples" "samples-v3"; do
 	########
 
 	tcd .splitted-merged
-	echo ++ epub-merge test: merge splitted
+	echo ├── epub-merge test: merge splitted
 
 	# shellcheck disable=SC2012
 	epub_merge -q ../splitted/*.epub
@@ -79,7 +80,7 @@ for dir in "samples" "samples-v3"; do
 	########
 
 	tcd .splitted
-	echo ++ epub-merge test: -x option
+	echo ├── epub-merge test: -x option
 
 	epub_merge -q -x ../merged/sample.epub
 
@@ -91,7 +92,7 @@ for dir in "samples" "samples-v3"; do
 	########
 
 	tcd .merged-O
-	echo ++ epub-merge test: -O option
+	echo ├── epub-merge test: -O option
 
 	epub_merge -qO ../original/sample1.epub ../original/sample3.epub \
 		../original/sample2.epub
@@ -108,7 +109,7 @@ for dir in "samples" "samples-v3"; do
 	########
 
 	tcd .merged-lsp
-	echo ++ epub-merge test: -l, -s, -p options
+	echo ├── epub-merge test: -l, -s, -p options
 
 	epub_merge -ql ko -s "번째 책" ../original/*.epub
 
@@ -124,7 +125,7 @@ for dir in "samples" "samples-v3"; do
 	########
 
 	tcd .force-write
-	echo "++ epub-merge test: -f option"
+	echo "├── epub-merge test: -f option"
 
 	epub_merge -q ../original/*.epub
 	cp sample.epub copied
@@ -139,7 +140,7 @@ for dir in "samples" "samples-v3"; do
 	########
 
 	tcd .target-dir
-	echo "++ epub-merge test: -d option"
+	echo "├── epub-merge test: -d option"
 
 	cd ..
 	epub_merge -qd .target-dir original/*.epub
@@ -149,15 +150,15 @@ for dir in "samples" "samples-v3"; do
 	########
 
 	tcd .title
-	echo "++ epub-merge test: -t, -n option"
+	echo "├── epub-merge test: -t, -n option"
 
 	epub_merge -q -n "test hahaha" -t "sample" ../original/*.epub
-	epub_diff "test hahaha.epub" ../merged/sample.epub 
+	epub_diff "sample.epub" ../merged/sample.epub 
 
 	########
 
 	tcd .name
-	echo "++ epub-merge test: -n option"
+	echo "├── epub-merge test: -n option"
 
 	epub_merge -q -n "test hahaha" ../original/*.epub
 	[[ -f "test hahaha.epub" ]]
@@ -165,7 +166,7 @@ for dir in "samples" "samples-v3"; do
 	########
 
 	tcd .dir
-	echo "++ epub-merge test: -d option"
+	echo "├── epub-merge test: -d option"
 
 	cd ..
 	epub_merge -qd '.dir' original/*.epub
@@ -174,5 +175,5 @@ for dir in "samples" "samples-v3"; do
 
 	########
 
-	echo "-- all done"
+	echo "└── all done"
 done
