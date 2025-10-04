@@ -260,7 +260,6 @@ escape_xml() {
 		-e 's/>/\&gt;/g' \
 		-e 's/"/\&quot;/g' \
 		-e "s/'/\&apos;/g"
-
 }
 
 # Extract XML element by pattern
@@ -281,20 +280,20 @@ extract_and_modify_xml() {
 	local tag="$1" pattern="$2" dir="$3" suffix="$4"
 
 	sed -E "
-		/<${tag}[^>]*${pattern}[^>]*>/,/<\/${tag}/!d
-		/<\/?${tag}/d
-		/^$/d
-		s:(src|href)=\":&$dir/:g
-		s:(id|idref)=\"[^\"]*:&-${suffix}:g
-		" ${5:+"$5"}
+	/<${tag}[^>]*${pattern}[^>]*>/,/<\/${tag}/!d
+	/<\/?${tag}/d
+	/^$/d
+	s:(src|href)=\":&$dir/:g
+	s:(id|idref)=\"[^\"]*:&-${suffix}:g
+	" ${5:+"$5"}
 }
 
 # Extract content before specified tag
 xml_grep_before_tag() {
 	debug_func "$@"
-        local tag_name="$1"
+	local tag_name="$1"
 
-        sed -E "/<\/*${tag_name}[^>]*>/,\$d" ${2:+"$2"}
+	sed -E "/<\/*${tag_name}[^>]*>/,\$d" ${2:+"$2"}
 }
 
 # Modify OPF metadata: replace title and append suffix('-0') to cover ID
@@ -302,10 +301,10 @@ modify_opf_metadata() {
 	debug_func "$@"
 	local epub_title="$1"
 	sed -E "
-		s|(<dc:title[^>]*>).*</dc:title>|\1$epub_title</dc:title>|
-		/name=\"cover\"/s|content=\"[^\"]*|&-0|
-		" \
-		| grep -viE 'calibre:(series|title_sort)'
+	s|(<dc:title[^>]*>).*</dc:title>|\1$epub_title</dc:title>|
+	/name=\"cover\"/s|content=\"[^\"]*|&-0|
+	" \
+	| grep -viE 'calibre:(series|title_sort)'
 }
 
 # Remove duplicate manifest font items from stdin (keep first occurrence only)
@@ -735,7 +734,7 @@ EOF
 	local ibooks="META-INF/com.apple.ibooks.display-options.xml"
 	if [[ ! -f "$ibooks" ]]; then
 		log "Adding iBooks display options"
-		        cat > "$ibooks" << EOF
+		cat > "$ibooks" << EOF
 <?xml version="1.0" encoding="UTF-8" ?>
 <display_options>
   <platform name="*">
@@ -798,15 +797,14 @@ EOF
 			| sed "s#[[:space:]]*src=[[:space:]]*.#&${cur_ncx_dir}/#"
 
 		# Merge navigation points
-		extract_and_modify_xml \
-				navMap "" "$cur_ncx_dir" "$i" "$cur_ncx"
+		extract_and_modify_xml navMap "" "$cur_ncx_dir" "$i" "$cur_ncx"
 
 		echo "  </navPoint>"
 	done \
 	| fix_playorder \
 	| sed -E "
-		$SED_REMOVE_DOT_PATH
-		$SED_REMOVE_DOTDOT_PATH" \
+	$SED_REMOVE_DOT_PATH
+	$SED_REMOVE_DOTDOT_PATH" \
 	>> "$toc_file"
 
 	echo -e "  </navMap>\n</ncx>" >> "$toc_file"
@@ -825,7 +823,6 @@ merge_navs() {
 	local nav_file="$MERGED_NAV_FILE"
 
 	# Initialize NAV with header
-
 	{
 		xml_grep_before_tag body "$FIRST_NAV" \
 			| sed "s#href=.#&$(dirname "$FIRST_NAV")/#" 
@@ -865,9 +862,9 @@ merge_navs() {
 	# Close NAV structure
 	echo -e '</ol></nav>\n</body>\n</html>' >> "$nav_file"
 	sed_i -E "
-		$SED_REMOVE_DOT_PATH
-		$SED_REMOVE_DOTDOT_PATH
-		" "$nav_file" "$nav_file"
+	$SED_REMOVE_DOT_PATH
+	$SED_REMOVE_DOTDOT_PATH
+	" "$nav_file" "$nav_file"
 	format_xml "$nav_file"
 }
 
@@ -926,15 +923,16 @@ merge_opfs() {
 		echo -e "  </spine>\n</package>"
 	} \
 	| sed -E "
-		s:\"0/[^\"']*\.ncx\":\"$MERGED_NCX_FILE\":
-		s:\"${FIRST_NCX_ID}-0\":\"$MERGED_NCX_ID\":
-		s:\"${FIRST_NCX_ID}\":\"$MERGED_NCX_ID\":
-		$SED_REMOVE_DOTDOT_PATH
-		$SED_REMOVE_DOT_PATH" \
-		| fix_font_paths \
-		| filter_dups \
-		| grep -ivE '[0-9][0-9]*/.*\.(ncx|otf|ttf|woff|woff2|eot)' \
-		>> "content.opf"
+	s:\"0/[^\"']*\.ncx\":\"$MERGED_NCX_FILE\":
+	s:\"${FIRST_NCX_ID}-0\":\"$MERGED_NCX_ID\":
+	s:\"${FIRST_NCX_ID}\":\"$MERGED_NCX_ID\":
+	$SED_REMOVE_DOTDOT_PATH
+	$SED_REMOVE_DOT_PATH
+	" \
+	| fix_font_paths \
+	| filter_dups \
+	| grep -ivE '[0-9][0-9]*/.*\.(ncx|otf|ttf|woff|woff2|eot)' \
+	>> "content.opf"
 
 	to_nfc content.opf
 	format_xml content.opf
@@ -975,36 +973,36 @@ backup_originals() {
 		# OPF
 		format_xml "$cur_opf"
 		sed -E "
-			s:<(item|reference).*href=[\"']:&$new_opf_dir/:g
-			s:(<(item|reference).*href=.*)(//):\1/:
-			$SED_REMOVE_DOT_PATH
-			s:href=\"[^\"]*\.ncx\":href=\"toc.ncx\":
-			s:href=\"[^\"]*$(basename "$cur_nav")\":href=\"$MERGED_NAV_FILE\":
-			s:[\"']${cur_ncx_id}[\"']:\"ncx\":" "$cur_opf" \
-			| fix_font_paths \
-			> ".epub-merge/$i.opf"
+		s:<(item|reference).*href=[\"']:&$new_opf_dir/:g
+		s:(<(item|reference).*href=.*)(//):\1/:
+		$SED_REMOVE_DOT_PATH
+		s:href=\"[^\"]*\.ncx\":href=\"toc.ncx\":
+		s:href=\"[^\"]*$(basename "$cur_nav")\":href=\"$MERGED_NAV_FILE\":
+		s:[\"']${cur_ncx_id}[\"']:\"ncx\":" "$cur_opf" \
+		| fix_font_paths \
+		> ".epub-merge/$i.opf"
 
 		# NCX
 		if [[ "$cur_ncx" != "$no_ncx" ]]; then
 			format_xml "$cur_ncx"
 			sed -E "
-				s:src=\":&$new_ncx_dir/:g
-				s:(src=.*)(//):\1/:
-				s:src=\"[^\"]*$(basename "$cur_nav")\":href=\"$MERGED_NAV_FILE\":
-				$SED_REMOVE_DOT_PATH" "$cur_ncx" \
-				> ".epub-merge/$i.ncx"
+			s:src=\":&$new_ncx_dir/:g
+			s:(src=.*)(//):\1/:
+			s:src=\"[^\"]*$(basename "$cur_nav")\":href=\"$MERGED_NAV_FILE\":
+			$SED_REMOVE_DOT_PATH" "$cur_ncx" \
+			> ".epub-merge/$i.ncx"
 		fi
 
 		# NAV
 		if [[ "$cur_nav" != "$no_nav" ]]; then
 			format_xml "$cur_nav"
 			sed -E "
-				s:(href=\")([^#]):\1$new_nav_dir/\2:g
-				s:(href=.*)(//):\1/:
-				s:href=\"[^\"]*$(basename "$cur_nav")\":href=\"$MERGED_NAV_FILE\":
-				$SED_REMOVE_DOT_PATH
-				$SED_REMOVE_DOTDOT_PATH" "$cur_nav" \
-				> ".epub-merge/$i.nav"
+			s:(href=\")([^#]):\1$new_nav_dir/\2:g
+			s:(href=.*)(//):\1/:
+			s:href=\"[^\"]*$(basename "$cur_nav")\":href=\"$MERGED_NAV_FILE\":
+			$SED_REMOVE_DOT_PATH
+			$SED_REMOVE_DOTDOT_PATH" "$cur_nav" \
+			> ".epub-merge/$i.nav"
 		fi
 
 		# Filename
@@ -1201,16 +1199,21 @@ extract_merged_epub() {
 	create_individual_epubs
 }
 
-
 # Verify all ePUB files have same version
 check_epub_versions() {
 	debug_func "$@"
 	local first_version
 	first_version="$(get_version "$1")"
 
+	if [[ -z "$first_version" || \
+			( "$first_version" != "2.0" && \
+                  "$first_version" != "3.0" ) ]]; then
+		error "Failed to get ePUB version ($1)"
+	fi
+
 	if [[ -z "$first_version" \
-		|| ( "$first_version" != "2.0" \
-		&& "$first_version" != "3.0" ) ]]; then
+			|| ( "$first_version" != "2.0" 
+				&& "$first_version" != "3.0" ) ]]; then
 		error "Failed to get ePUB version ($1)"
 	fi
 

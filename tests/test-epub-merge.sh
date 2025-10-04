@@ -32,7 +32,7 @@ TEMP_DIR="$(mktemp -d)"
 for dir in "samples" "samples-v3"; do
 	SAMPLE_DIR="$EPUB_MERGE_DIR/tests/$dir"
 
-	echo ├── "epub-merge test: $dir"
+	echo ".   epub-merge test: $dir"
 
 	########
 
