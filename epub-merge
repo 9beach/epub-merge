@@ -1,37 +1,5 @@
 #!/bin/bash
 
-# epub-merge - combines multiple ePUB files into a single volume, or 
-# extracts merged ePUB files
-
-set -euo pipefail
-
-if [[ "$OSTYPE" == "darwin"* ]]; then
-	sed_i() {
-		sed -i '' "$@"
-	}
-else
-	sed_i() {
-		sed -i "$@"
-	}
-fi
-
-# Error handler for ERR, INT, and TERM signals
-trap 'printf "\033[31mError (epub-merge): at line $LINENO\033[0m\n" >&2; \
-	cleanup' ERR INT TERM
-
-# Cleanup temp files on exit
-cleanup() {
-	if [[ -f "${TEMP_EPUB:-}" ]]; then
-		rm -f "$TEMP_EPUB"
-	fi
-	if [[ -d "${TEMP_DIR:-}" ]]; then
-		rm -rf "$TEMP_DIR"
-	fi
-}
-
-trap cleanup EXIT
-
-# Display usage information
 show_usage() {
 	cat >&2 << 'EOF'
 NAME
@@ -113,6 +81,34 @@ EXAMPLES
            Arabian Nights_ Tales of 1,001 Nights.epub: successfully created
 EOF
 }
+
+set -euo pipefail
+
+# Error handler for ERR, INT, and TERM signals
+trap 'printf "\033[31mError (epub-merge): at line $LINENO\033[0m\n" >&2; \
+	cleanup' ERR INT TERM
+
+# Cleanup temp files on exit
+cleanup() {
+	if [[ -f "${TEMP_EPUB:-}" ]]; then
+		rm -f "$TEMP_EPUB"
+	fi
+	if [[ -d "${TEMP_DIR:-}" ]]; then
+		rm -rf "$TEMP_DIR"
+	fi
+}
+
+trap cleanup EXIT
+
+if [[ "$OSTYPE" == "darwin"* ]]; then
+	sed_i() {
+		sed -i '' "$@"
+	}
+else
+	sed_i() {
+		sed -i "$@"
+	}
+fi
 
 # Global variables
 OUTPUT_DIR="$(realpath "$(pwd)")"
@@ -491,6 +487,8 @@ parse_args() {
 			v)
 				IFS=';' read -a _labels <<< "$OPTARG"
 				for l in "${_labels[@]}"; do
+					l="${l#"${l%%[![:space:]]*}"}"
+					l="${l%"${l##*[![:space:]]}"}"
 					TOC_VOLUME_LABELS+=("$l")
 				done
 				;;
