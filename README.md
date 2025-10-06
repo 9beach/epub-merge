@@ -1,22 +1,62 @@
-# epub-merge
+# EPUB Tools: epub-merge & epub-meta
 
-[epub-merge](https://github.com/9beach/epub-merge) is a lightweight command-line program written in `bash` that allows merging multiple EPUB files into one volume, or splitting volumes produced by epub-merge.
+This repository provides two **super fast**, lightweight command-line tools written in `bash` for working with EPUB files:
 
-✅ Supports both **EPUB 3** and **EPUB 2**.
+- **[epub-merge](https://github.com/9beach/epub-merge)**: Merges multiple EPUB files into a single volume or extracts a merged EPUB back into its original components.
+- **[epub-meta](https://github.com/9beach/epub-merge)**: Reads and edits metadata in an EPUB or standalone OPF file.
 
-**Features:**
-- Runs on macOS and Linux terminals
-- Minimal dependencies - uses only built-in shell commands
-- Requires only basic utilities: `zip`, `unzip`, and standard POSIX tools
-- No external libraries or complex installations needed
+Both tools support **EPUB 3** and **EPUB 2**, run on **macOS** and **Linux**, and require only standard POSIX utilities with minimal external libraries (`zip`, `unzip`).
+
+## Installation
+
+```bash
+# Install epub-merge and epub-meta
+sudo curl -L https://raw.githubusercontent.com/9beach/epub-merge/main/epub-merge -o /usr/local/bin/epub-merge
+sudo curl -L https://raw.githubusercontent.com/9beach/epub-merge/main/epub-meta -o /usr/local/bin/epub-meta
+sudo chmod a+rx /usr/local/bin/epub-merge /usr/local/bin/epub-meta
+```
+
+## Features
+
+### epub-merge
+
+- Merges multiple EPUB files into one volume with a unified table of contents.
+- Extracts merged EPUBs back into original files.
+- Removes duplicate fonts to reduce file size.
+- Automatically detects language and applies cultural volume labels (e.g., Korean: `제 1권`, `제 2권`).
+- Customizable titles, labels, and output filenames.
+- Minimal dependencies: `zip`, `unzip`, and POSIX tools.
+
+### epub-meta
+
+- Reads, modifies, or removes metadata (e.g., title, author, language) in EPUB or OPF files.
+- Supports complex metadata (e.g., CDATA for descriptions).
+- Handles multiple authors or subjects (separated by `;`).
+- Processes standalone OPF files with `-O` flag.
+- Ensures clean output with MacOS BSD `sed` compatibility (e.g., removes trailing `--`).
+- Minimal dependencies: `zip`, `unzip`, and POSIX tools.
 
 ## How it works
 
-**Merging:**
-- Creates a new volume-based table of contents structure at the top level
-- Automatically generates book title and filename from common parts of input files (can be customized with `-n` option)
-- Removes duplicate fonts to reduce overall file size
-- Detects language from EPUB metadata or content analysis, then applies appropriate cultural conventions:
+### epub-merge
+
+**Merging**:
+
+- Creates a volume-based table of contents (TOC) structure:
+
+```text
+  Volume 1
+    Chapter 1: The Beginning
+    Chapter 2: A New Journey
+    ...
+  Volume 2
+    Chapter 4: Challenges Ahead
+    Chapter 5: The Turning Point
+    ...
+```
+
+- Generates book title and filename from common parts of input files (customizable with `-t`).
+- Applies language-specific volume labels:
   - Korean: `제 1권`, `제 2권`
   - Chinese: `第1卷`, `第2卷`
   - Japanese: `第1巻`, `第2巻`
@@ -25,38 +65,28 @@
   - German: `1. Band`, `2. Band`
   - Russian: `Том 1`, `Том 2`
   - Default: `Volume 1`, `Volume 2`
-- Volume labels can be customized with `-p` (prefix) and `-s` (suffix) options
-- Merged TOC structure:
-  ```
-  Volume 1
-    Chapter 1: The Beginning
-    Chapter 2: A New Journey
-    Chapter 3: The Discovery
-    ....
-  Volume 2
-    Chapter 4: Challenges Ahead
-    Chapter 5: The Turning Point
-    Chapter 6: Resolution
-    ....
-  Volume n
-  ```
+- Supports custom labels with `-p` (prefix), `-s` (suffix), or `-v` (labels).
 
-**Extracting:**
-- Only EPUBs merged with epub-merge can be split back
-- Perfectly restores original book titles and table of contents
-- Note: Internal OPF and NCX files are standardized to `content.opf` and `toc.ncx`
-- Font directory is standardized to `fonts/`
+**Extracting**:
 
-## Installation
+- Splits EPUBs merged by `epub-merge` into original files.
+- Restores original titles and TOC structures.
+- Standardizes OPF (`content.opf`), NCX (`toc.ncx`), and font directory (`fonts/`).
 
-```bash
-sudo curl -L https://raw.githubusercontent.com/9beach/epub-merge/main/epub-merge -o /usr/local/bin/epub-merge
-sudo chmod a+rx /usr/local/bin/epub-merge
-```
+### epub-meta
 
-## Usage
+**Metadata Editing**:
 
-```
+- Modifies metadata fields (e.g., title, author, translator) in EPUB or OPF files.
+- Displays current metadata if no options are provided.
+- Supports CDATA for complex descriptions and multiple values (e.g., authors separated by `;`).
+- Processes standalone OPF files with `-O` flag.
+
+## Manuals
+
+### epub-merge
+
+```txt
 NAME
      epub-merge -- merge multiple ePUB files into one or extract merged ePUB
 
@@ -131,4 +161,86 @@ EXAMPLES
            Extracting a2.epub
            Extracting a3.epub
            Arabian Nights_ Tales of 1,001 Nights.epub: successfully created
+```
+
+### epub-meta
+
+```txt
+NAME
+     epub-meta -- read and edit metadata information in an ePUB or OPF file
+
+SYNOPSIS
+     epub-meta [-t title] [-a author] [-r translator] [-x rights] [-i ISBN]
+               [-s subject] [-l language] [-d description] [-p publisher]
+               [-u published] [-m modified] [-O] {epub-file | opf-file}
+
+DESCRIPTION
+     The epub-meta utility allows you to read, modify, or remove standard
+     metadata fields within an ePUB container file or a standalone OPF file.
+
+     If no options are specified, epub-meta displays the current metadata
+     information from the file.
+
+     To remove a metadata field, pass an empty string ("") as the value.
+
+     The options are as follows:
+
+     -a author
+             Set author(s). Multiple authors are allowed, separated by ';'.
+             Each author may optionally include a sort name, for example:
+             "Tom Waits::Waits, Tom; Lily Allen::Allen, Lily; Beck".
+
+     -d description
+             Set description.
+
+     -i ISBN
+             Set ISBN.
+
+     -l language
+             Set the book's language (e.g., en, ko).
+
+     -m modified
+             Set modification date.
+
+     -O opf-file
+             Specify a standalone OPF file to edit instead of extracting it
+             from EPUB file.
+
+     -p publisher
+             Set publisher.
+
+     -q      Quiet mode.  Suppress progress messages.
+
+     -r translator
+             Set translator(s). Same format as -a.
+
+     -s subject
+             Set subject(s). Multiple subjects are allowed, separated by ';'.
+
+     -t title
+             Set the book's title.
+
+     -u published
+             Set publication date (e.g., "2016-07-31").
+
+     -x rights
+             Set rights / copyright info.
+
+     -h
+             Show this help message.
+
+EXAMPLES
+     Basic usage:
+
+          epub-meta book.epub
+          epub-meta -t 'Brave New World' -a 'Aldous Huxley' book.epub
+          epub-meta -O content.opf
+          epub-meta -O -t 'Brave New World' -a 'Aldous Huxley' content.opf
+
+     With CDATA description:
+
+          epub-meta -t "1984" -a "George Orwell" -d '<![CDATA[
+          <p>A dystopian novel about totalitarianism.</p>
+          <p>Published in 1949.</p>
+          ]]>' book.epub
 ```
