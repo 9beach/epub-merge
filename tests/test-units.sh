@@ -25,13 +25,11 @@ TEMP_DIR="$(mktemp -d)"
 
 cd "$TEMP_DIR"
 
-escaped="$(escape_xml "<<hello&&")"
+escaped="$(escape_xml_for_sed "<<hello&&")"
 assert_eq "$escaped" '\&lt;\&lt;hello\&amp;\&amp;'
 
-escaped="$(escape_xml "<<hello&&>>")"
+escaped="$(escape_xml_for_sed "<<hello&&>>")"
 assert_eq "$escaped" '\&lt;\&lt;hello\&amp;\&amp;\&gt;\&gt;'
-
-exit
 
 # path_to_root
 assert_eq "$(path_to_root "a.txt")" "."
