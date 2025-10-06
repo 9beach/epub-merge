@@ -10,8 +10,8 @@ Both tools support **EPUB 3** and **EPUB 2**, run on **macOS** and **Linux**, an
 ## Installation
 
 ```bash
-sudo curl -L https://raw.githubusercontent.com/9beach/epub-merge/refs/heads/epub-merge -o /usr/local/bin/epub-merge
-sudo curl -L https://raw.githubusercontent.com/9beach/epub-merge/refs/heads/epub-meta -o /usr/local/bin/epub-meta
+sudo curl -L https://raw.githubusercontent.com/9beach/epub-merge/refs/heads/main/epub-merge -o /usr/local/bin/epub-merge
+sudo curl -L https://raw.githubusercontent.com/9beach/epub-merge/refs/heads/main/epub-meta -o /usr/local/bin/epub-meta
 sudo chmod a+rx /usr/local/bin/epub-merge /usr/local/bin/epub-meta
 ```
 
