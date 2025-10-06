@@ -145,10 +145,10 @@ EPUB_LANG=""
 DO_NOT_SORT_PARAMS=""
 EXTRACT_MODE=""
 
+# --- Logging functions
+
 DEBUG=${DEBUG:-}
 QUIET=""
-
-# --- Logging functions
 
 log() {
 	if [[ -z "$QUIET" ]]; then
