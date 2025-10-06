@@ -2,8 +2,8 @@
 
 This repository provides two **super fast**, lightweight command-line tools written in `bash` for working with EPUB files:
 
-- **[epub-merge](https://github.com/9beach/epub-merge)**: Merges multiple EPUB files into a single volume or extracts a merged EPUB back into its original components.
-- **[epub-meta](https://github.com/9beach/epub-merge)**: Reads and edits metadata in an EPUB or standalone OPF file.
+- **[epub-merge](https://github.com/9beach/epub-merge#epub-merge)**: Merges multiple EPUB files into a single volume or extracts a merged EPUB back into its original components.
+- **[epub-meta](https://github.com/9beach/epub-merge#epub-meta)**: Reads and edits metadata in an EPUB or standalone OPF file.
 
 Both tools support **EPUB 3** and **EPUB 2**, run on **macOS** and **Linux**, and require only standard POSIX utilities with minimal external libraries (`zip`, `unzip`).
 
