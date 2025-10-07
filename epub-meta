@@ -254,9 +254,8 @@ if [[ "$edit_mode" == false ]]; then
 	s#([^<]*<[^>]*opf:scheme=.ISBN[^>]*>)${sed_expr_tail}#28$label_isbn: \2#
 	p
 	}" \
-	| sed "s#</dc:.*##" \
 	| sort \
-	| sed -E -e 's:^..::' -e "s:^($label_author|$label_translator)(.* )\(Unknown\)$:\1\2:" \
+	| sed -E -e "s#</dc:.*##" -e 's:^..::' -e "s:^($label_author|$label_translator)(.* )\(Unknown\)$:\1\2:" \
 	| unescape_xml \
 	| split_xml_lines
 	exit 0
