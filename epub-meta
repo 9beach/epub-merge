@@ -224,6 +224,8 @@ fi
 
 # --- Read OPF file and exit
 
+sed_expr_tail="(.*)(</dc:.*)"
+
 if [[ "$edit_mode" == false ]]; then
 	if [[ -z "$opf_file" ]]; then
 		unzip -p "$epub_file" "$epub_opf"
@@ -232,27 +234,27 @@ if [[ "$edit_mode" == false ]]; then
 	fi \
 	| rearrange_xml_elements \
 	| sed -nE "/(<dc:title|<dc:publisher|<dc:subject|<dc:creator|<dc:description|<dc:rights|<dc:language|<dc:date|<dc:contributor.*[\"']trl[\"']|opf:scheme=[\"']ISBN[\"'])[^>]*>.+<\/dc:/I {
+	s#[^<]*<[^>]*opf:role=[\"']trl[\"'][^>]*opf:file-as=[\"']([^\"']+)[\"'][^>]*>${sed_expr_tail}#07$label_translator: \2 [\1]#
+	s#[^<]*<[^>]*opf:file-as=[\"']([^\"']+)[\"'][^>]*opf:role=[\"']trl[\"'][^>]*[^>]*>${sed_expr_tail}#07$label_translator: \2 [\1]#
+	s#([^<]*<[^>]*opf:role=[\"']trl[\"'][^>]*>)${sed_expr_tail}#07$label_translator: \2#
 
-	s#[^<]*<[^>]*opf:role=[\"']trl[\"'][^>]*opf:file-as=[\"']([^\"']+)[\"'][^>]*>(.*)(</dc:.*)#07$label_translator: \2 [\1]#
-	s#[^<]*<[^>]*opf:file-as=[\"']([^\"']+)[\"'][^>]*opf:role=[\"']trl[\"'][^>]*[^>]*>(.*)(</dc:.*)#07$label_translator: \2 [\1]#
-	s#([^<]*<[^>]*opf:role=[\"']trl[\"'][^>]*>)(.*)(</dc:.*)#07$label_translator: \2#
+	s#[^<]*<[^>]*opf:role=[\"']aut[\"'][^>]*opf:file-as=[\"']([^\"']+)[\"'][^>]*>${sed_expr_tail}#05$label_author: \2 [\1]#
+	s#[^<]*<[^>]*opf:file-as=[\"']([^\"']+)[\"'][^>]*opf:role=[\"']aut[\"'][^>]*[^>]*>${sed_expr_tail}#05$label_author: \2 [\1]#
+	s#([^<]*<dc:creator[^>]*>)${sed_expr_tail}#05$label_author: \2#
 
-	s#[^<]*<[^>]*opf:role=[\"']aut[\"'][^>]*opf:file-as=[\"']([^\"']+)[\"'][^>]*>(.*)(</dc:.*)#05$label_author: \2 [\1]#
-	s#[^<]*<[^>]*opf:file-as=[\"']([^\"']+)[\"'][^>]*opf:role=[\"']aut[\"'][^>]*[^>]*>(.*)(</dc:.*)#05$label_author: \2 [\1]#
-	s#([^<]*<dc:creator[^>]*>)(.*)(</dc:.*)#05$label_author: \2#
-
-	s#([^<]*<dc:title[^>]*>)(.*)(</dc:.*)#01$label_title: \2#
-	s#([^<]*<dc:publisher[^>]*>)(.*)(</dc:.*)#10$label_publisher: \2#
-	s#([^<]*<dc:date[^>]*publication[^>]*>)(.*)(</dc:.*)#12$label_published: \2#
-	s#([^<]*<dc:date[^>]*modification[^>]*>)(.*)(</dc:.*)#13$label_modified: \2#
-	s#([^<]*<dc:date[^>]*>)(.*)(</dc:.*)#12$label_published: \2#
-	s#([^<]*<dc:subject[^>]*>)(.*)(</dc:.*)#15$label_subject: \2#
-	s#([^<]*<dc:descript[^>]*>)(.*)(</dc:.*)#23$label_description: \2#
-	s#([^<]*<dc:language[^>]*>)(.*)(</dc:.*)#25$label_language: \2#
-	s#([^<]*<dc:rights[^>]*>)(.*)(</dc:.*)#27$label_rights: \2#
-	s#([^<]*<[^>]*opf:scheme=.ISBN[^>]*>)(.*)(</dc:.*)#28$label_isbn: \2#
+	s#([^<]*<dc:title[^>]*>)${sed_expr_tail}#01$label_title: \2#
+	s#([^<]*<dc:publisher[^>]*>)${sed_expr_tail}#10$label_publisher: \2#
+	s#([^<]*<dc:date[^>]*publication[^>]*>)${sed_expr_tail}#12$label_published: \2#
+	s#([^<]*<dc:date[^>]*modification[^>]*>)${sed_expr_tail}#13$label_modified: \2#
+	s#([^<]*<dc:date[^>]*>)${sed_expr_tail}#12$label_published: \2#
+	s#([^<]*<dc:subject[^>]*>)${sed_expr_tail}#15$label_subject: \2#
+	s#([^<]*<dc:descript[^>]*>)${sed_expr_tail}#23$label_description: \2#
+	s#([^<]*<dc:language[^>]*>)${sed_expr_tail}#25$label_language: \2#
+	s#([^<]*<dc:rights[^>]*>)${sed_expr_tail}#27$label_rights: \2#
+	s#([^<]*<[^>]*opf:scheme=.ISBN[^>]*>)${sed_expr_tail}#28$label_isbn: \2#
 	p
 	}" \
+	| sed "s#</dc:.*##" \
 	| sort \
 	| sed -E -e 's:^..::' -e "s:^($label_author|$label_translator)(.* )\(Unknown\)$:\1\2:" \
 	| unescape_xml \
