@@ -31,7 +31,6 @@ sudo chmod a+rx /usr/local/bin/epub-merge /usr/local/bin/epub-meta
 - Reads, modifies, or removes metadata (e.g., title, author, language) in EPUB or OPF files.
 - Supports complex metadata (e.g., CDATA for descriptions).
 - Handles multiple authors or subjects (separated by `//`).
-- Ensures clean output with MacOS BSD `sed` compatibility (e.g., removes trailing `--`).
 - Minimal dependencies: `zip`, `unzip`, and POSIX tools.
 
 ## How it works
