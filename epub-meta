@@ -172,31 +172,19 @@ escape_xml() {
 	fi
 
 	# Otherwise, escape XML special chars and control characters
-	printf '%s' "$input" | tr '\n' '\r' | sed \
-		-e 's/&/\&amp;/g' \
-		-e 's/</\&lt;/g' \
-		-e 's/>/\&gt;/g' \
-		-e 's/"/\&quot;/g' \
-		-e "s/'/\\&apos;/g" \
-		-e 's/#/\#/g' # `#` is delimeter of `sed` in the code.
+	printf '%s' "$input" \
+		| tr '\n' '\r' \
+		| sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' \
+			-e 's/"/\&quot;/g' -e "s/'/\\&apos;/g" -e 's/#/\#/g'
+		# `#` is delimeter of `sed` in the code.
 }
 
 unescape_xml() {
-	sed -E \
-		-e 's/&#xD;//g' \
-		-e 's/&#13;//g' \
-		-e 's/&#xA;/\n/g' \
-		-e 's/&#10;/\n/g' \
-		-e 's/&#x9;/\t/g' \
-		-e 's/&#9;/\t/g' \
-		-e 's/&lt;/</g' \
-		-e 's/&gt;/>/g' \
-		-e 's/&quot;/"/g' \
-		-e 's/&nbsp;/ /g' \
-		-e "s/&apos;/'/g" \
-		-e 's/&#39;/'"'"'/g' \
-		-e 's/&#x27;/'"'"'/g' \
-		-e 's/&amp;/\&/g'
+	sed -E -e 's/&#xD;//g' -e 's/&#13;//g' -e 's/&#xA;/\n/g' \
+		-e 's/&#10;/\n/g' -e 's/&#x9;/\t/g' -e 's/&#9;/\t/g' \
+		-e 's/&lt;/</g' -e 's/&gt;/>/g' -e 's/&quot;/"/g' \
+		-e 's/&nbsp;/ /g' -e "s/&apos;/'/g" -e 's/&#39;/'"'"'/g' \
+		-e 's/&#x27;/'"'"'/g' -e 's/&amp;/\&/g'
 }
 
 join_lines() {
