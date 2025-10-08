@@ -103,10 +103,10 @@ echo "Basic OPF testing completed"
 
 echo "Basic EPUB testing started"
 
-cp ../sample-in.epub .
+cp "$epub_merge_test_dir/samples/original/sample1.epub" .
 
-epub_meta -a '배수아--배, 수아//Suah Bae--Bae, Suah' -t '뱀과물 (Snake And Water)' -r 'Deborah Smith' -i 'ISBN 978-89-9470-250-6 13191' -l ko -m '2025-06-05' -u '2025-05-01' -p '문학동네' -s '문학//꿈//몽환' -x '권리를 존중해주세요' sample-in.epub 2> aa.err
-epub_meta sample-in.epub > aa.out
+epub_meta -a '배수아--배, 수아//Suah Bae--Bae, Suah' -t '뱀과물 (Snake And Water)' -r 'Deborah Smith' -i 'ISBN 978-89-9470-250-6 13191' -l ko -m '2025-06-05' -u '2025-05-01' -p '문학동네' -s '문학//꿈//몽환' -x '권리를 존중해주세요' sample1.epub 2> aa.err
+epub_meta sample1.epub > aa.out
 
 diff aa.out ../aa.out
 diff aa.err ../aa.err
