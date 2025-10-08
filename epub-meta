@@ -1,129 +1,23 @@
 #!/bin/bash
 
-show_usage() {
-	cat >&2 << 'EOF'
-epub-meta -- read and edit metadata in an ePUB or OPF file
+# --- Runtime / Mode Flags
 
-Usage:
-  epub-meta [-Oq] [-t title] [-a author] [-r translator] [-x rights] [-i ISBN]
-            [-s subject] [-l language] [-d description] [-p publisher]
-            [-u published] [-m modified] {epub-file | opf-file}
+DEBUG=${DEBUG:-}	 # Debug output toggle.
+QUIET="${QUIET:-}"	 # Suppress non-critical logs.
+edit_mode=false		 # If false, show metadata; if true, modify.
+opf_file_given=""	 # True if standalone OPF given.
 
-Options:
-  -a author      Set author(s) (e.g., "Tom Waits::Waits, Tom; Beck").
-  -d description Set description (supports CDATA).
-  -i ISBN        Set ISBN.
-  -l language    Set language (e.g., en, ko).
-  -m modified    Set modification date.
-  -O             Specify input as a standalone OPF file (not EPUB).
-  -p publisher   Set publisher.
-  -q             Quiet mode, suppress progress messages.
-  -r translator  Set translator(s) (same format as -a).
-  -s subject     Set subject(s) (multiple separated by ';').
-  -t title       Set title.
-  -u published   Set publication date (e.g., "2016-07-31").
-  -x rights      Set rights/copyright info.
-  -h             Show this help message.
+readonly removing="<removed>"  # Marker for deleting a field.
 
-Notes:
-  - Use empty string ("") to remove a metadata field.
-  - Without options or only with `-O`, displays current metadata.
-EOF
-    exit 1
-}
+# --- File paths
 
-set -euo pipefail
+epub_file=""             # Input EPUB file path.
+opf_file=""              # Input OPF file path (if given).
+epub_opf=""              # Path to OPF inside EPUB.
+temp_dir=""              # Temporary working directory.
+indent=""                # Indentation detected before </metadata>.
 
-trap 'printf "\033[31mError ($(basename "$0")): at line $LINENO\033[0m\n" >&2; \
-	cleanup' ERR INT TERM
-
-cleanup() {
-	if [[ -d "${temp_dir:-}" ]]; then
-		rm -rf "$temp_dir"
-	fi
-}
-
-trap cleanup EXIT
-
-DEBUG=${DEBUG:-}
-QUIET="${QUIET:-}"
-
-log() {
-	if [[ -z "$QUIET" ]]; then
-		printf '\033[90m%s\033[0m\n' "$*" >&2
-	fi
-}
-
-debug() {
-	if [[ -n "$DEBUG" ]]; then
-		printf "\033[34m[DEBUG] ${BASH_LINENO[1]} %s\033[0m\n" "$*" >&2
-	fi
-}
-
-error() {
-	printf "\033[31mError (epub-merge): %s\033[0m\n" "$*" >&2
-	exit 1
-}
-
-escape_xml() {
-	input="$1"
-
-	# If CDATA, return as-is
-	if [[ "$input" =~ \<\!\[CDATA\[ ]]; then
-		# Make CDATA one line, later recover with `tr '\r' '\n'`
-		printf '%s' "$input" | tr '\n' '\r'
-		return
-	fi
-	# Otherwise, escape XML special chars and control characters
-	printf '%s' "$input" | tr '\n' '\r' | sed \
-		-e 's/&/\\\&amp;/g' \
-		-e 's/</\\\&lt;/g' \
-		-e 's/>/\\\&gt;/g' \
-		-e 's/"/\\\&quot;/g' \
-		-e "s/'/\\\&apos;/g" \
-		-e 's/#/\\\#/g' # `#` is delimeter of `sed`
-}
-
-unescape_xml() {
-	# Just echo
-	sed -E \
-		-e 's/&#xD;//g' \
-		-e 's/&#13;//g' \
-		-e 's/&#xA;/\n/g' \
-		-e 's/&#10;/\n/g' \
-		-e 's/&#x9;/\t/g' \
-		-e 's/&#9;/\t/g' \
-		-e 's/&lt;/</g' \
-		-e 's/&gt;/>/g' \
-		-e 's/&quot;/"/g' \
-		-e 's/&nbsp;/ /g' \
-		-e "s/&apos;/'/g" \
-		-e 's/&#39;/'"'"'/g' \
-		-e 's/&#x27;/'"'"'/g' \
-		-e 's/&amp;/\&/g'
-}
-
-merge_xml_lines() {
-	tr '\n' '\037' < "${1:-/dev/stdin}"
-}
-
-split_xml_lines() {
-	tr '\037' '\n' < "${1:-/dev/stdin}"
-}
-
-rearrange_xml_elements() {
-	tr '\n' '\037' | sed -E 's#(<dc:title|<dc:publisher|<dc:subject|<dc:creator|<dc:description|<dc:rights|<dc:language|<dc:contributor|<dc:identifier|<dc:date)#\n&#g'
-}
-
-if [[ "$OSTYPE" == "darwin"* ]]; then
-	sed_i() {
-		sed -i '' "$@"
-	}
-else
-	sed_i() {
-		sed -i "$@"
-	}
-fi
+# --- Option targets (new_* fields)
 
 new_title=""
 new_author=""
@@ -136,67 +30,27 @@ new_isbn=""
 new_rights=""
 new_published=""
 new_modified=""
-edit_mode=false
-epub_file=""
-opf_file=""
-opf_file_given=""
-epub_opf=""
 
-readonly removing="<removed>"
+# --- Label translations (auto-detected by locale)
 
-# Process options with getopts
-while getopts "t:a:r:p:s:l:d:i:x:u:m:Oqh" opt; do
-	# shellcheck disable=SC2034
-	case $opt in
-		t) new_title="${OPTARG:-$removing}"; edit_mode=true ;;
-		a) new_author="${OPTARG:-$removing}"; edit_mode=true ;;
-		r) new_translator="${OPTARG:-$removing}"; edit_mode=true ;;
-		p) new_publisher="${OPTARG:-$removing}"; edit_mode=true ;;
-		s) new_subject="${OPTARG:-$removing}"; edit_mode=true ;;
-		l) new_language="${OPTARG:-$removing}"; edit_mode=true ;;
-		d) new_description="${OPTARG:-$removing}"; edit_mode=true ;;
-		i) new_isbn="${OPTARG:-$removing}"; edit_mode=true ;;
-		x) new_rights="${OPTARG:-$removing}"; edit_mode=true ;;
-		u) new_published="${OPTARG:-$removing}"; edit_mode=true ;;
-		m) new_modified="${OPTARG:-$removing}"; edit_mode=true ;;
-		O) opf_file_given=1 ;;
-		q) QUIET=1 ;;
-		h) show_usage ;;
-		\?) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
-		:) echo "Option -$OPTARG requires an argument." >&2; exit 1 ;;
-	esac
-done
-shift $((OPTIND-1))
+label_title=""
+label_author=""
+label_translator=""
+label_subject=""
+label_publisher=""
+label_language=""
+label_description=""
+label_published=""
+label_modified=""
+label_rights=""
+label_isbn=""
 
-# Check epub file
-if [[ $# -ne 1 ]]; then
-	show_usage
-fi
+# --- Label translations
 
-if [[ $opf_file_given -ne 1 ]]; then
-	epub_file="$(realpath "$1")"
-else
-	opf_file="$(realpath "$1")"
-fi
+# Just my preference
+has_kr_lang="$(defaults read -g AppleLanguages 2> /dev/null | grep 'ko-' || true)"
 
-readonly epub_file
-
-if [[ ! -f "$opf_file" && ! -f "$epub_file" ]]; then
-	error "File not found: $1"
-fi
-
-if [[ -z "$opf_file" ]]; then
-	epub_opf="$(unzip -p "$epub_file" META-INF/container.xml \
-		| sed -n "s#.*full-path=.\([^\"']*\).*#\\1#p")"
-
-	if [[ -z "$epub_opf" ]]; then
-		error "OPF file not found."
-	fi
-fi
-
-HAS_KR_LANG="$(defaults read -g AppleLanguages 2> /dev/null | grep 'ko-' || true)"
-
-if [[ "${LANG:-ko_KR}" == ko* || -n "$HAS_KR_LANG" ]]; then
+if [[ "${LANG:-ko_KR}" == ko* || -n "$has_kr_lang" ]]; then
 	readonly label_title="제목"
 	readonly label_author="작가"
 	readonly label_translator="번역"
@@ -222,252 +76,466 @@ else
 	readonly label_isbn="ISBN"
 fi
 
-# --- Read OPF file and exit
+# --- Filters for selective tag replacement
 
-sed_expr_tail="(.*)(</dc:.*)"
+opf_filter=""            # Regex to remove old tags before insertion.
+output_filter=""         # Regex for highlighting changed fields in output.
+
+readonly sep=$'\037'     # Internal field separator for XML line handling.
+
+
+# --- Utility functions
+
+show_usage() {
+	# Print usage and help message to stderr.
+	cat >&2 << 'EOF'
+epub-meta -- read and edit metadata in an ePUB or OPF file
+
+Usage:
+  epub-meta [-q] [-t title] [-a author] [-r translator] [-x rights] [-i ISBN]
+            [-s subject] [-l language] [-d description] [-p publisher]
+            [-u published] [-m modified] {epub-file | opf-file}
+
+Options:
+  -a author      Set author(s) (e.g., "Tom Waits::Waits, Tom; Beck").
+  -d description Set description (supports CDATA).
+  -i ISBN        Set ISBN.
+  -l language    Set language (e.g., en, ko).
+  -m modified    Set modification date.
+  -p publisher   Set publisher.
+  -q             Quiet mode, suppress progress messages.
+  -r translator  Set translator(s) (same format as -a).
+  -s subject     Set subject(s) (multiple separated by ';').
+  -t title       Set title.
+  -u published   Set publication date (e.g., "2016-07-31").
+  -x rights      Set rights/copyright info.
+  -h             Show this help message.
+
+Notes:
+  - Use empty string ("") to remove a metadata field.
+  - Without options, displays current metadata.
+EOF
+    exit 1
+}
+
+cleanup() {
+	# Remove temporary working directory if it exists.
+	if [[ -d "${temp_dir:-}" ]]; then
+		rm -rf "$temp_dir"
+	fi
+}
+
+log() {
+	# Print gray log messages unless QUIET is set.
+	if [[ -z "$QUIET" ]]; then
+		printf '\033[90m%s\033[0m\n' "$*" >&2
+	fi
+}
+
+debug() {
+	# Print blue debug messages when DEBUG is enabled.
+	if [[ -n "$DEBUG" ]]; then
+		printf "\033[34m[DEBUG] #${BASH_LINENO[1]} %s\033[0m\n" "$*" >&2
+	fi
+}
+
+debug_var() {
+        debug "$1=\"${!1}\""
+}
+
+error() {
+	# Print red error message and exit.
+	printf "\033[31mError (epub-merge): %s\033[0m\n" "$*" >&2
+	exit 1
+}
+
+check_file_type() {
+	# Quickly checks file type (XML or ZIP) by examining the first few 
+	# bytes.
+	local file="$1"
+	readonly zip_magic=$'PK\x03\x04' 
+	readonly xml_start='<?xml'
+	local header_bytes
+	header_bytes=$(head -c 4 "$1")
+
+	if [[ "$header_bytes" == "$zip_magic" ]]; then
+		return 0
+	fi
+
+	header_bytes=$(head -c 10 "$file")
+	if [[ "$header_bytes" == "$xml_start"* ]]; then
+		opf_file_given=1
+		return 0
+	fi
+
+	error "Not a epub or OPF ($(basename "$1"))"
+}
+
+# --- XML handling helpers
+
+escape_xml() {
+	# Escape special XML characters and control chars.
+	# If input contains CDATA, keep it intact but flatten newlines to '\r'.
+	# Used in sed pattern, so too much escapes.
+	input="$1"
+
+	# If CDATA, return as-is
+	if [[ "$input" =~ \<\!\[CDATA\[ ]]; then
+		# Make CDATA one line, later recover with `tr '\r' '\n'`
+		printf '%s' "$input" | tr '\n' '\r'
+		return
+	fi
+	# Otherwise, escape XML special chars and control characters
+	printf '%s' "$input" | tr '\n' '\r' | sed \
+		-e 's/&/\\\&amp;/g' \
+		-e 's/</\\\&lt;/g' \
+		-e 's/>/\\\&gt;/g' \
+		-e 's/"/\\\&quot;/g' \
+		-e "s/'/\\\&apos;/g" \
+		-e 's/#/\\\#/g' # `#` is delimeter of `sed`
+}
+
+unescape_xml() {
+	# Unescape XML entities and restore control characters.
+	sed -E \
+		-e 's/&#xD;//g' \
+		-e 's/&#13;//g' \
+		-e 's/&#xA;/\n/g' \
+		-e 's/&#10;/\n/g' \
+		-e 's/&#x9;/\t/g' \
+		-e 's/&#9;/\t/g' \
+		-e 's/&lt;/</g' \
+		-e 's/&gt;/>/g' \
+		-e 's/&quot;/"/g' \
+		-e 's/&nbsp;/ /g' \
+		-e "s/&apos;/'/g" \
+		-e 's/&#39;/'"'"'/g' \
+		-e 's/&#x27;/'"'"'/g' \
+		-e 's/&amp;/\&/g'
+}
+
+join_lines() {
+	# Replace '\n' with unit separator (␟, 0x1F) for line-safe processing.
+	tr '\n' '\037' < "${1:-/dev/stdin}"
+}
+
+split_lines() {
+	# Restore line structure: '\r' and '\037' → '\n\n'.
+	tr '\r\037' '\n\n' < "${1:-/dev/stdin}"
+}
+
+split_xml_elements() {
+	# Convert self-closing <dc:*> tags to open-close,
+	# and place each element (open/close) on its own line.
+	tr '\n' '\037' \
+		| sed -E "s#<dc:(title|publisher|subject|creator|description|rights|language|contributor|date|identifier)(/>|[[:blank:]]+[^>]*/>)#<dc:\1\2></dc:\1>#g" \
+		| sed -E 's#(</dc:title[^>]*>|</dc:publisher[^>]*>|</dc:subject[^>]*>|</dc:creator[^>]*>|</dc:description[^>]*>|</dc:rights[^>]*>|</dc:language[^>]*>|</dc:contributor[^>]*>|</dc:identifier[^>]*>|</dc:date[^>]*>)#&\n#g' \
+		| sed -E 's#(<dc:title[^>]*>|<dc:publisher[^>]*>|<dc:subject[^>]*>|<dc:creator[^>]*>|<dc:description[^>]*>|<dc:rights[^>]*>|<dc:language[^>]*>|<dc:contributor[^>]*>|<dc:identifier[^>]*>|<dc:date[^>]*>)#\n&#g'
+}
+
+# --- Metadata display
+
+show_tags() {
+	# Parse formatted OPF XML and print readable key-value metadata lines.
+	# Supports labels in Korean or English.
+	# Output sorted and cleaned, suitable for terminal display.
+	#
+	# Examples of transformed output:
+	#   01Title: The Book Title
+	#   05Author: Jane Doe [Doe, Jane]
+	#   06Translator: John Smith [Smith, John]
+	local tail_expr="(.*)(</dc:.*)"
+
+	sed -nE "/(<dc:title|<dc:publisher|<dc:subject|<dc:creator|<dc:description|<dc:rights|<dc:language|<dc:date|<dc:contributor.*[\"']trl[\"']|opf:scheme=[\"']ISBN[\"'])[^>]*>.+<\/dc:/I {
+	s#(<dc:title[^>]*>)${tail_expr}#01$label_title: \2#
+	s#<[^>]*opf:role=[\"']trl[\"'][^>]*opf:file-as=[\"']([^\"']+)[\"'][^>]*>${tail_expr}#06$label_translator: \2 [\1]#
+	s#<[^>]*opf:file-as=[\"']([^\"']+)[\"'][^>]*opf:role=[\"']trl[\"'][^>]*[^>]*>${tail_expr}#06$label_translator: \2 [\1]#
+	s#(<[^>]*opf:role=[\"']trl[\"'][^>]*>)${tail_expr}#06$label_translator: \2#
+	s#<[^>]*opf:role=[\"']aut[\"'][^>]*opf:file-as=[\"']([^\"']+)[\"'][^>]*>${tail_expr}#05$label_author: \2 [\1]#
+	s#<[^>]*opf:file-as=[\"']([^\"']+)[\"'][^>]*opf:role=[\"']aut[\"'][^>]*[^>]*>${tail_expr}#05$label_author: \2 [\1]#
+	s#(<dc:creator[^>]*>)${tail_expr}#05$label_author: \2#
+	s#(<dc:subject[^>]*>)${tail_expr}#08$label_subject: \2#
+	s#(<dc:description[^>]*>)${tail_expr}#09$label_description: \2#
+	s#(<dc:publisher[^>]*>)${tail_expr}#10$label_publisher: \2#
+	s#(<dc:date[^>]*publication[^>]*>)${tail_expr}#12$label_published: \2#
+	s#(<dc:date[^>]*modification[^>]*>)${tail_expr}#13$label_modified: \2#
+	s#(<dc:date[^>]*>)${tail_expr}#12$label_published: \2#
+	s#(<dc:language[^>]*>)${tail_expr}#25$label_language: \2#
+	s#(<dc:rights[^>]*>)${tail_expr}#27$label_rights: \2#
+	s#(<[^>]*opf:scheme=.ISBN[^>]*>)${tail_expr}#28$label_isbn: \2#
+	p
+	}" ${1:+"$1"} \
+	| sort -V \
+	| sed -E -e "s#</dc:.*##" -e 's:^..::' -e "s:^($label_author|$label_translator)(.* )\[Unknown\]$:\1\2:" \
+	| grep -v "^[[:space:]]*<dc:.*" \
+	| unescape_xml
+}
+
+# --- OPF tag creation
+
+echo_elements() {
+	# Create multi elements from 'display_name::sort_name' format and 
+	# multi-entry (; separated).
+	# Internal function of `make_new_tags()`
+	local new_content="$1"
+	local elements=""
+	IFS=';' read -ra name_array <<< "$new_content"
+	for name in "${name_array[@]}"; do
+		name="${name#"${name%%[![:blank:]]*}"}"  # ltrim
+		name="${name%"${name##*[![:blank:]]}"}"  # rtrim
+
+		if [[ "$name" == *"::"* ]]; then
+			display_name="${name%%::*}"
+			sort_name="${name##*::}"
+			display_name="${display_name#"${display_name%%[![:blank:]]*}"}"
+			display_name="${display_name%"${display_name##*[![:blank:]]}"}"
+			sort_name="${sort_name#"${sort_name%%[![:blank:]]*}"}"
+			sort_name="${sort_name%"${sort_name##*[![:blank:]]}"}"
+			elements+="${sep}$indent$indent\n<${element}${attr_string} opf:file-as=\"$sort_name\">$display_name</$element>${sep}"
+		else
+			elements+="${sep}$indent$indent\n<${element}${attr_string}>$name</$element>${sep}"
+		fi
+	done
+
+	echo -e "${elements}"
+}
+
+make_new_tags() {
+        # Create dc elements and print them.
+        local element="dc:$1"
+        local attr="${2:-}"
+        local value="${3:-}"
+	local content="new_${4:-$1}"                                          
+        local attr_string=""
+        local new_content="${!content}"
+
+        if [[ -z "${new_content}" || "$new_content" == "$removing" ]]; then
+        	return 0
+	fi
+
+        [[ -n "$attr" && -n "$value" ]] && attr_string=" ${attr}=\"${value}\""
+        [[ "$new_content" == "$removing" ]] && return
+
+	new_content="$(escape_xml "$new_content")"
+	if [[ -n "${MULTI_VALUE_DEFINED:-}" ]]; then
+		echo_elements "$new_content"
+	else
+		echo -e "${sep}$indent$indent\n<${element}${attr_string}>${new_content}</${element}>${sep}"
+	fi
+}
+
+opf_matching_pattern() {
+	# Build regex pattern for matching dc:* element with optional attribute.
+	local element="$1"
+	local attr="${2:-}"
+	local value="${3:-}"
+	local attr_pattern=""
+
+	if [[ -n "$attr" && -n "$value" ]]; then
+		value_esc=$(printf '%s' "$value" | sed 's/["\]/\\&/g')
+		attr_pattern="[^>]*${attr}=[\"']${value_esc}[\"']"
+	fi
+
+    echo "<dc:${element}${attr_pattern}[^>]*>"
+}
+
+format_opf() {
+	# Rebuild the final OPF file:
+	#   - combine modified header and untouched footer,
+	#   - normalize line breaks,
+	#   - strip blank lines.
+	cat "$new_opf_header" "$opf_footer" | tr -d '\n' | split_lines | grep -v '^[[:blank:]]*$' | tr '\r' '\n'
+}
+
+# --- Here we go
+
+set -euo pipefail
+
+trap 'printf "\033[31mError ($(basename "$0")): at line $LINENO\033[0m\n" >&2; \
+	cleanup' ERR INT TERM
+trap cleanup EXIT
+
+while getopts "t:a:r:p:s:l:d:i:x:u:m:qh" opt; do
+	# shellcheck disable=SC2034
+	case $opt in
+		t) new_title="${OPTARG:-$removing}"; edit_mode=true ;;
+		a) new_author="${OPTARG:-$removing}"; edit_mode=true ;;
+		r) new_translator="${OPTARG:-$removing}"; edit_mode=true ;;
+		p) new_publisher="${OPTARG:-$removing}"; edit_mode=true ;;
+		s) new_subject="${OPTARG:-$removing}"; edit_mode=true ;;
+		l) new_language="${OPTARG:-$removing}"; edit_mode=true ;;
+		d) new_description="${OPTARG:-$removing}"; edit_mode=true ;;
+		i) new_isbn="${OPTARG:-$removing}"; edit_mode=true ;;
+		x) new_rights="${OPTARG:-$removing}"; edit_mode=true ;;
+		u) new_published="${OPTARG:-$removing}"; edit_mode=true ;;
+		m) new_modified="${OPTARG:-$removing}"; edit_mode=true ;;
+		q) QUIET=1 ;;
+		h) show_usage ;;
+		\?) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
+		:) echo "Option -$OPTARG requires an argument." >&2; exit 1 ;;
+	esac
+done
+shift $((OPTIND-1))
+
+if [[ $# -ne 1 ]]; then
+	show_usage
+fi
+
+check_file_type "$1"
+
+if [[ $opf_file_given -ne 1 ]]; then
+	epub_file="$(realpath "$1")"
+else
+	opf_file="$(realpath "$1")"
+fi
+
+readonly epub_file
+
+if [[ ! -f "$opf_file" && ! -f "$epub_file" ]]; then
+	error "File not found: $1"
+fi
+
+if [[ -z "$opf_file" ]]; then
+	epub_opf="$(unzip -p "$epub_file" META-INF/container.xml \
+		| sed -n "s#.*full-path=.\([^\"']*\).*#\\1#p")"
+
+	if [[ -z "$epub_opf" ]]; then
+		error "OPF file not found."
+	fi
+fi
+
+# --- Read metadata
 
 if [[ "$edit_mode" == false ]]; then
+	# No edit option, then read metadata and exit.
 	if [[ -z "$opf_file" ]]; then
+		debug "Currently no OPF file"
 		unzip -p "$epub_file" "$epub_opf"
 	else
 		cat "$opf_file"
 	fi \
-	| rearrange_xml_elements \
-	| sed -nE "/(<dc:title|<dc:publisher|<dc:subject|<dc:creator|<dc:description|<dc:rights|<dc:language|<dc:date|<dc:contributor.*[\"']trl[\"']|opf:scheme=[\"']ISBN[\"'])[^>]*>.+<\/dc:/I {
-	s#[^<]*<[^>]*opf:role=[\"']trl[\"'][^>]*opf:file-as=[\"']([^\"']+)[\"'][^>]*>${sed_expr_tail}#07$label_translator: \2 [\1]#
-	s#[^<]*<[^>]*opf:file-as=[\"']([^\"']+)[\"'][^>]*opf:role=[\"']trl[\"'][^>]*[^>]*>${sed_expr_tail}#07$label_translator: \2 [\1]#
-	s#([^<]*<[^>]*opf:role=[\"']trl[\"'][^>]*>)${sed_expr_tail}#07$label_translator: \2#
+	| split_xml_elements \
+	| show_tags \
+	| split_lines
 
-	s#[^<]*<[^>]*opf:role=[\"']aut[\"'][^>]*opf:file-as=[\"']([^\"']+)[\"'][^>]*>${sed_expr_tail}#05$label_author: \2 [\1]#
-	s#[^<]*<[^>]*opf:file-as=[\"']([^\"']+)[\"'][^>]*opf:role=[\"']aut[\"'][^>]*[^>]*>${sed_expr_tail}#05$label_author: \2 [\1]#
-	s#([^<]*<dc:creator[^>]*>)${sed_expr_tail}#05$label_author: \2#
-
-	s#([^<]*<dc:title[^>]*>)${sed_expr_tail}#01$label_title: \2#
-	s#([^<]*<dc:publisher[^>]*>)${sed_expr_tail}#10$label_publisher: \2#
-	s#([^<]*<dc:date[^>]*publication[^>]*>)${sed_expr_tail}#12$label_published: \2#
-	s#([^<]*<dc:date[^>]*modification[^>]*>)${sed_expr_tail}#13$label_modified: \2#
-	s#([^<]*<dc:date[^>]*>)${sed_expr_tail}#12$label_published: \2#
-	s#([^<]*<dc:subject[^>]*>)${sed_expr_tail}#15$label_subject: \2#
-	s#([^<]*<dc:descript[^>]*>)${sed_expr_tail}#23$label_description: \2#
-	s#([^<]*<dc:language[^>]*>)${sed_expr_tail}#25$label_language: \2#
-	s#([^<]*<dc:rights[^>]*>)${sed_expr_tail}#27$label_rights: \2#
-	s#([^<]*<[^>]*opf:scheme=.ISBN[^>]*>)${sed_expr_tail}#28$label_isbn: \2#
-	p
-	}" \
-	| sort \
-	| sed -E -e "s#</dc:.*##" -e 's:^..::' -e "s:^($label_author|$label_translator)(.* )\(Unknown\)$:\1\2:" \
-	| unescape_xml \
-	| split_xml_lines
 	exit 0
 fi
 
-# --- Functions and variables for OPF file modification
+# --- Edit metadata
 
-readonly sep=$'\037'
+# These are used to remove specific XML elements and format output messages.
+#
+# Example opf_filter: "<dc:publisher[^>]*>|<dc:subject[^>]*>"
+# Example output_filter: "Publisher:.*|Subject:.*|Title:.*"
+if [[ -n "$new_title" ]]; then
+	opf_filter+="$(opf_matching_pattern title)|"
+	output_filter+="$label_title:.*|"
+fi
+if [[ -n "$new_author" ]]; then
+	opf_filter+="<dc:creator[[:space:]]*>|"
+	opf_filter+="$(opf_matching_pattern creator opf:role aut)|"
+	output_filter+="$label_author:.*|"
+fi
+if [[ -n "$new_translator" ]]; then
+	opf_filter+="$(opf_matching_pattern creator opf:role trl)|"
+	opf_filter+="$(opf_matching_pattern contributor opf:role trl)|"
+	output_filter+="$label_translator:.*|"
+fi
+if [[ -n "$new_publisher" ]]; then
+	opf_filter+="$(opf_matching_pattern publisher)|"
+	output_filter+="$label_publisher:.*|"
+fi
+if [[ -n "$new_subject" ]]; then
+	opf_filter+="$(opf_matching_pattern subject)|"
+	output_filter+="$label_subject:.*|"
+fi
+if [[ -n "$new_language" ]]; then
+	opf_filter+="$(opf_matching_pattern language)|"
+	output_filter+="$label_language:.*|"
+fi
+if [[ -n "$new_description" ]]; then
+	opf_filter+="$(opf_matching_pattern description)|"
+	output_filter+="$label_description:.*|"
+fi
+if [[ -n "$new_isbn" ]]; then
+	opf_filter+="$(opf_matching_pattern identifier opf:scheme ISBN)|"
+	output_filter+="$label_isbn:.*|"
+fi
+if [[ -n "$new_rights" ]]; then
+	opf_filter+="$(opf_matching_pattern rights)|"
+	output_filter+="$label_rights:.*|"
+fi
+if [[ -n "$new_published" ]]; then
+	opf_filter+="<dc:date[[:space:]]*>|"
+	opf_filter+="$(opf_matching_pattern date opf:event publication)|"
+	output_filter+="$label_published:.*|"
+fi
+if [[ -n "$new_modified" ]]; then
+	opf_filter+="$(opf_matching_pattern date opf:event modification)|"
+	output_filter+="$label_modified:.*|"
+fi
 
-# Remove existing tags completely (working on single-line merged XML)
-remove_tags() {
-	local element="$1" attr="${2:-}" value="${3:-}"
-	local attr_pattern=""
-	[[ -n "$attr" && -n "$value" ]] && attr_pattern="[^>]*${attr}=[\"']${value}[\"']"
-	sed_i -E "s#<${element}${attr_pattern}[^>]*>.*</${element}>##g" "$opf_header"
-}
+opf_filter="${opf_filter%?}"
+output_filter="${output_filter%?}"
 
-# Update existing tag or add new one (original logic for single-value tags)
-update_tag() {
-	local element="$1"
-	local content
-	content="$(escape_xml "$2")"
-	local attr="${3:-}"
-	local value="${4:-}"
+debug_var opf_filter
 
-	local attr_pattern=""
-	local attr_string=""
-	if [[ -n "$attr" && -n "$value" ]]; then
-		attr_pattern="[^>]*${attr}=[\"']${value}[\"']"
-		attr_string=" ${attr}=\"${value}\""
-	fi
-
-	# Update if exists, otherwise add new
-	if grep -qE -m 1 "<${element}${attr_pattern}[^>]*>.*</${element}>" "$opf_header"; then
-		sed_i -E "s#(<${element}${attr_pattern}[^>]*>).*(</${element}>)#\1${content}\2#" "$opf_header"
-	else
-		printf '%s' "${sep}$indent$indent<${element}${attr_string}>${content}</${element}>${sep}" >> "$opf_header"
-	fi
-}
-
-# Get old value for logging (single value)
-get_old_content() {
-	local element="$1" attr="${2:-}" value="${3:-}"
-	local pattern="<${element}[^>]*"
-	[[ -n "$attr" && -n "$value" ]] && pattern+="${attr}=[\"']${value}[\"'][^>]*"
-	sed -nE "s#.*${pattern}>(.*)</${element}>.*#\1#p" "$opf_header" | head -1 | unescape_xml | split_xml_lines
-}
-
-# Get old values for logging (multi values, supports file-as attribute)
-get_old_contents_with_file_as() {
-	local element="$1" attr="${2:-}" value="${3:-}"
-	local pattern="<${element}[^>]*"
-	[[ -n "$attr" && -n "$value" ]] && pattern+="${attr}=[\"']${value}[\"'][^>]*"
-	pattern+=">.*</${element}>"
-
-	local result
-	result=$(grep -o "$pattern" "$opf_header" 2>/dev/null || true)
-
-	if [[ -n "$result" ]]; then
-		echo "$result" | while IFS= read -r line; do
-		display=$(echo "$line" | sed -nE "s#.*>(.*)</${element}>.*#\1#p")
-		file_as=$(echo "$line" | sed -nE "s#.*opf:file-as=[\"']([^\"']*)[\"'].*#\1#p")
-		[[ -n "$file_as" ]] && echo "${display} [${file_as}]" || echo "$display"
-	done | paste -sd ";" - | sed 's#;#; #g'
-	fi | unescape_xml | split_xml_lines
-}
-
-# Format new values for logging (convert :: notation to [] notation)
-format_new_contents() {
-	local input="$1" result=""
-	local IFS=';'
-	for item in $input; do
-		item="${item#"${item%%[![:blank:]]*}"}"   # ltrim
-		item="${item%"${item##*[![:blank:]]}"}"   # rtrim
-		if [[ "$item" == *"::"* ]]; then
-			local display="${item%%::*}"
-			local sort="${item##*::}"
-			display="${display#"${display%%[![:blank:]]*}"}"
-			display="${display%"${display##*[![:blank:]]}"}"
-			sort="${sort#"${sort%%[![:blank:]]*}"}"
-			sort="${sort%"${sort##*[![:blank:]]}"}"
-			item="$display [$sort]"
-		fi
-		[[ -n "$result" ]] && result+="; "
-		result+="$item"
-	done
-	echo "$result"
-}
-
-# --- Modify OPF file
-
-# Create temporary directory
 temp_dir=$(mktemp -d)
 readonly temp_dir
 
+# --- Work in temp dir
+
 cd "$temp_dir"
 
+new_opf_header=".header-new"
 opf_header=".header"
 opf_footer=".footer"
 
 if [[ -n "$opf_file" ]]; then
 	epub_opf="$temp_dir/.opf"
-	merge_xml_lines "$opf_file" > "$epub_opf"
+	join_lines "$opf_file" > "$epub_opf"
 else
 	mkdir -p "$(dirname "$epub_opf")"
 	# shellcheck disable=SC2094
-	unzip -p "$epub_file" "$epub_opf" | merge_xml_lines > "$epub_opf"
+	unzip -p "$epub_file" "$epub_opf" | join_lines > "$epub_opf"
 fi
 
 indent="$(grep -m 1 -o "[[:blank:]]*</metadata>" "$epub_opf" | sed -E "s#</metadata>##")"
 readonly indent
 
-sed -E "s#(^.*)([[:blank:]]*</metadata>.*$)#\1#" "$epub_opf" | rearrange_xml_elements > "$opf_header"
+# Before </metadata>: <?xml... -> $opf_header
+sed -E "s#(^.*)([[:blank:]]*</metadata>.*$)#\1#" "$epub_opf" | split_xml_elements > "$opf_header"
 
-# "...>.*$)" too greedy. So add "${sep}${indent}"
-sed -E "s#(^.*)([[:blank:]]*</metadata>.*$)#${sep}${indent}\2#" "$epub_opf" | rearrange_xml_elements > "$opf_footer"
+# From </metadata>: </metadata>...</package> -> $opf_footer
+sed -E "s#(^.*)(</metadata>.*$)#${sep}${indent}\2#" "$epub_opf" > "$opf_footer"
 
-# Convert <dc:creator opf:role="trl"> -> <dc:contributor opf:role="trl">
-if [[ -n "$new_author" || -n "$new_translator" ]]; then
-	sed_i -E "s#<dc:creator([^>]*opf:role=[\"']trl[\"'][^>]*>.*)</dc:creator>#<dc:contributor\1</dc:contributor>#g" "$opf_header"
+{
+	# Remove elements to be replaced
+	grep -E -v "${opf_filter}" "$opf_header"
+
+	# Print new elements
+	make_new_tags title
+	MULTI_VALUE_DEFINED=1 make_new_tags creator opf:role aut author 
+	MULTI_VALUE_DEFINED=1 make_new_tags creator opf:role trl translator 
+	MULTI_VALUE_DEFINED=1 make_new_tags subject subject
+	make_new_tags publisher
+	make_new_tags date opf:event publication published 
+	make_new_tags date opf:event modification modified 
+	make_new_tags rights
+	make_new_tags identifier opf:scheme ISBN isbn 
+	make_new_tags description
+	make_new_tags language
+} > "$new_opf_header"
+
+if [[ -z "$opf_file" ]]; then
+	format_opf > "$epub_opf"
+	zip -q "$epub_file" "$epub_opf"
+else
+	format_opf > "$opf_file"
 fi
 
-# Convert self-closing to open-close if exists
-sed_i -E "s#<dc:(title|publisher|subject|creator|description|rights|language|contributor|date)(/>|[[:blank:]]+[^>]*/>)#<dc:\1\2></dc:\1>#g" "$opf_header"
-
-update_or_remove_tag() {
-	local element="dc:$1"
-	local content="new_${2:-$1}"
-	local label="label_${2:-$1}" old_content
-
-	local attr="${3:-}"
-	local value="${4:-}"
-
-	[[ -z "${!content}" ]] && return 0
-
-	old_content=$(get_old_content "$element" "$attr" "$value")
-
-	if [[ "${!content}" == "$removing" ]]; then
-		remove_tags "$element" "$attr" "$value"
-	else
-		update_tag "$element" "${!content}" "$attr" "$value"
-	fi
-	log "${!label}: ${old_content:-<empty>} -> ${!content}"
-}
-
-remove_and_add_tags_with_file_as() {
-	local element="dc:$1"
-	local content="new_$2"
-	local label="label_$2" old_content
-
-	local attr="${3:-}"
-	local value="${4:-}"
-
-	local attr_string=""
-	[[ -n "$attr" && -n "$value" ]] && attr_string=" ${attr}=\"${value}\""
-
-	[[ -z "${!content}" ]] && return 0
-
-	old_content=$(get_old_contents_with_file_as "$element" "$attr" "$value")
-	remove_tags "$element"
-	new_content="${!content}"
-	debug "$new_content"
-	debug "---"
-	new_content="$(escape_xml "$new_content")"
-	debug "$new_content"
-
-	if [[ "$new_content" == "$removing" ]]; then
-		log "${!label}: ${old_content:-<empty>} -> $removing"
-	else
-		IFS=';' read -ra name_array <<< "$new_content"
-		elements=""
-		for name in "${name_array[@]}"; do
-			name="${name#"${name%%[![:blank:]]*}"}"  # ltrim
-			name="${name%"${name##*[![:blank:]]}"}"  # rtrim
-			debug "$name"
-
-			if [[ "$name" == *"::"* ]]; then
-				display_name="${name%%::*}"
-				sort_name="${name##*::}"
-				display_name="${display_name#"${display_name%%[![:blank:]]*}"}"
-				display_name="${display_name%"${display_name##*[![:blank:]]}"}"
-				sort_name="${sort_name#"${sort_name%%[![:blank:]]*}"}"
-				sort_name="${sort_name%"${sort_name##*[![:blank:]]}"}"
-				elements+="${sep}$indent$indent<${element}${attr_string} opf:file-as=\"$sort_name\">$display_name</$element>${sep}"
-			else
-				elements+="${sep}$indent$indent<${element}${attr_string}>$name</$element>${sep}"
-			fi
-		done
-		echo "${elements}" >> "$opf_header"
-		log "${!label}: ${old_content:-<empty>} -> $(format_new_contents "$new_content")"
-	fi
-}
-
-remove_and_add_tags_with_file_as creator author opf:role aut
-remove_and_add_tags_with_file_as contributor translator opf:role trl
-remove_and_add_tags_with_file_as subject subject
-update_or_remove_tag rights
-update_or_remove_tag identifier isbn opf:scheme ISBN
-update_or_remove_tag date modified opf:event modification
-update_or_remove_tag date published opf:event publication
-update_or_remove_tag title
-update_or_remove_tag publisher
-update_or_remove_tag description
-update_or_remove_tag language
-
-recover_and_cat_opf() {
-	cat "$opf_header" "$opf_footer" | tr -d '\n' | split_xml_lines | grep -v '^[[:blank:]]*$' | tr '\r' '\n'
-}
-
-if [[ -n "$opf_file" ]]; then
-	recover_and_cat_opf > "$opf_file"
-else
-	recover_and_cat_opf > ".x" && mv .x "$epub_opf"
-	zip -q "$epub_file" "$epub_opf"
+if [[ "$QUIET" -ne 1 ]]; then
+	show_tags "$new_opf_header" \
+		| sed -E "s/$output_filter/\x1b[32m&\x1b[0m/g" \
+		| split_lines >&2
 fi

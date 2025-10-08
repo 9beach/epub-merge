@@ -1,11 +1,8 @@
 #!/bin/bash
 
-set -euo pipefail
-
 export DEBUG="${DEBUG:-}"
-EPUB_MERGE_DIR="$(realpath "$(dirname "$0")/..")"
 
-trap 'echo "Error (epub-meta): at line $LINENO" >&2; cat err' ERR INT TERM
+trap 'echo "Error (epub-meta): at line $LINENO" >&2' ERR INT TERM
 
 cleanup() {
 	[[ -n "$temp_dir" ]] && rm -fr "$temp_dir" || true
@@ -14,72 +11,111 @@ cleanup() {
 trap cleanup EXIT
 
 epub_meta() {
-	"$EPUB_MERGE_DIR/epub-meta" "$@"
+	"$epub_merge_test_dir/../epub-meta" "$@"
 }
 
-temp_dir="$(mktemp -d)"
+epub_merge_test_dir="$(realpath "$(dirname "$0")")"
 
-cp samples-meta/* "$temp_dir"
+test_dir="${test_dir:-}"
+temp_dir="${temp_dir:-}"
 
-cd "$temp_dir"
+if [[ -n "$test_dir" ]]; then
+	cp "$epub_merge_test_dir/samples-meta/"* "$test_dir"
+	cd "$test_dir"
+else
+	set -euo pipefail
+	temp_dir="$(mktemp -d)"
+	cp "$epub_merge_test_dir/samples-meta/"* "$temp_dir"
+	cd "$temp_dir"
+fi
 
-cp -f content.opf.org content.opf
+mkdir -p out
+cd out
 
-diff <( LANG=ko epub_meta -O content.opf ) 01.out
+# alias epub_meta=epub-meta
+cp -f ../content.opf-org content.opf
 
-LANG=ko epub_meta -a '배수아::배, 수아;Suah Bae::Bae, Suah' -t '뱀과물 (Snake And Water)' -r 'Deborah Smith' -O content.opf 2> err
-diff content.opf content.opf-02
-diff 02.err err
-diff 02.out <( LANG=ko epub_meta -O content.opf )
+epub_meta content.opf > 01.out
 
-LANG=kr epub_meta -d '<![CDATA[
+diff_text() {
+	diff "$1".out <( sed -E 's/\x1b\[[0-9;]*m//g' "$1.err" )
+}
+
+export LANG=ko_KR.UTF-8
+
+echo "Basic OPF testing started"
+
+epub_meta -a '배수아::배, 수아;Suah Bae::Bae, Suah' -t '뱀과물 (Snake And Water)' -r 'Deborah Smith' content.opf 2> 02.err
+epub_meta content.opf > 02.out
+cp -f content.opf content.opf-02
+
+epub_meta -d '<![CDATA[
 <p>A dystopian novel about totalitarianism.</p>
 <p>Published in 1949.</p>
-]]>' -O content.opf 2> err
-diff content.opf content.opf-03
-diff 03.err err
-diff 03.out <( LANG=ko epub_meta -O content.opf )
+]]>' content.opf 2> 03.err
+epub_meta content.opf > 03.out
+cp -f content.opf content.opf-03
 
-LANG=kr epub_meta -i 'ISBN 978-89-9470-250-6 13191' -l en -m '2025-06-05' -u '2025-05-01' -p '문학동네' -s '문학;꿈;몽환' -x '권리를 존중해주세요' -O content.opf 2> err
-diff content.opf content.opf-04
-diff 04.err err
-diff 04.out <( LANG=ko epub_meta -O content.opf )
+epub_meta -i 'ISBN 978-89-9470-250-6 13191' -l en -m '2025-06-05' -u '2025-05-01' -p '문학동네' -s '문학;꿈;몽환' -x '권리를 존중해주세요' content.opf 2> 04.err
+epub_meta content.opf > 04.out
+cp -f content.opf content.opf-04
 
 # with -q option
-LANG=kr epub_meta -i 'ISBN 978-89-9470-250-6 13191' -l en -m '2025-06-05' -u '2025-05-01' -p '문학동네' -s '문학;꿈;몽환' -x '권리를 존중해주세요' -q -O content.opf 2> err
-diff content.opf content.opf-05
-diff 05.err err
-diff 04.out <( LANG=ko epub_meta -O content.opf )
+epub_meta -i 'ISBN 978-89-9470-250-6 13191' -l en -m '2025-06-05' -u '2025-05-01' -p '문학동네' -s '문학;꿈;몽환' -x '권리를 존중해주세요' -q content.opf 2> 05.err
+epub_meta content.opf > 05.out # Same to 04.out
+cp -f content.opf content.opf-05
+[[ ! -s 05.err ]]
 
-# itempotency
-# without -q option
-LANG=kr epub_meta -i 'ISBN 978-89-9470-250-6 13191' -l en -m '2025-06-05' -u '2025-05-01' -p '문학동네' -s '문학;꿈;몽환' -x '권리를 존중해주세요' -O content.opf 2> err
-diff 06.err err
-diff 04.out <( LANG=ko epub_meta -O content.opf )
+epub_meta -i 'ISBN 978-89-9470-250-6 13191' -l en -m '2025-06-05' -u '2025-05-01' -p '문학동네' -s '문학;꿈;몽환' -x '권리를 존중해주세요' content.opf 2> 06.err
+epub_meta content.opf > 06.out # Same to 04.out
+cp -f content.opf content.opf-06
 
-cp -f content.opf.org content.opf
+diff 05.out 04.out
+diff 06.out 04.out
+diff 06.err 04.err
 
-LANG=kr epub_meta -i 'BAD
+epub_meta -i 'BAD
 ISBN XXXXX' -a "Bad
 Author
 ;Really Really
 Bad Author::But has
-Lovely Name" -O content.opf 2> err
-diff 07.err err
-diff 07.out <( LANG=ko epub_meta -O content.opf )
+Lovely Name" content.opf 2> 07.err
+epub_meta content.opf > 07.out
+cp -f content.opf content.opf-07
 
-LANG=kr epub_meta -i 'ISBN 978-89-9470-250-6 13191' -a '배수아' -r 'Deborah Smith' -O content.opf 2> err
-diff 08.err err
-diff 08.out <( LANG=ko epub_meta -O content.opf )
+epub_meta -i 'ISBN 978-89-9470-250-6 13191' -a '배수아' -r 'Deborah Smith' content.opf 2> 08.err
+epub_meta content.opf > 08.out
+cp -f content.opf content.opf-08
 
-echo "Basic testing completed"
+diff 01.out ../01.out
+for i in {2..8}; do
+	diff_text 02
+	diff "0${i}.out" "../0${i}.out"
+	diff "0${i}.err" "../0${i}.err"
+	diff "content.opf-0${i}" "../content.opf-0${i}"
+done
 
-time ( for i in {1..100}; do epub_meta -O content.opf > /dev/null; done )
+echo "Basic OPF testing completed"
+
+echo "Basic EPUB testing started"
+
+cp ../sample-in.epub .
+
+epub_meta -a '배수아::배, 수아;Suah Bae::Bae, Suah' -t '뱀과물 (Snake And Water)' -r 'Deborah Smith' -i 'ISBN 978-89-9470-250-6 13191' -l ko -m '2025-06-05' -u '2025-05-01' -p '문학동네' -s '문학;꿈;몽환' -x '권리를 존중해주세요' sample-in.epub 2> aa.err
+epub_meta sample-in.epub > aa.out
+
+diff aa.out ../aa.out
+diff aa.err ../aa.err
+diff_text aa
+
+echo "Basic EPUB testing completed"
+
+time ( for i in {1..50}; do epub_meta content.opf > /dev/null; done )
 
 echo
-echo "100 reads completed"
+echo "50 reads completed"
 
-time ( for i in {1..100}; do epub_meta -i 'ISBN 978-89-9470-250-6 13191' -l en -m '2025-06-05' -u '2025-05-01' -p '문학동네' -x '권리를 존중해주세요' -qO content.opf; done )
+time ( for i in {1..50}; do epub_meta -i 'ISBN 978-89-9470-250-6 13191' -l en -m '2025-06-05' -u '2025-05-01' -p '문학동네' -x '권리를 존중해주세요' -q content.opf; done )
 
 echo
-echo "100 writes completed"
+echo "50 writes completed"

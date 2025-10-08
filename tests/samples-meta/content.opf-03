@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?><package xmlns="http://www.idpf.org/2007/opf" unique-identifier="bookid" version="2.0">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
-    <dc:title>뱀과물 (Snake And Water)</dc:title>
     <dc:date>2017-12-07</dc:date>
     <dc:identifier id="bookid">urn:uuid:68D67A93-9C8E-A648-B593-96D71D9E0CEA</dc:identifier>
     <dc:language>ko</dc:language>
@@ -8,9 +7,10 @@
     <meta content="cover.jpg" name="cover"/>
     <meta content="1" name="GBSProcVer"/>
     <meta content="GoogleEbooks" name="GBSEpubSource"/>
+    <dc:title>뱀과물 (Snake And Water)</dc:title>
     <dc:creator opf:role="aut" opf:file-as="배, 수아">배수아</dc:creator>
     <dc:creator opf:role="aut" opf:file-as="Bae, Suah">Suah Bae</dc:creator>
-    <dc:contributor opf:role="trl">Deborah Smith</dc:contributor>
+    <dc:creator opf:role="trl">Deborah Smith</dc:creator>
     <dc:description><![CDATA[
 <p>A dystopian novel about totalitarianism.</p>
 <p>Published in 1949.</p>

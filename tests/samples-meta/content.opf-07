@@ -1,13 +1,24 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?><package xmlns="http://www.idpf.org/2007/opf" unique-identifier="bookid" version="2.0">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
-    <dc:title>뱀과 물</dc:title>
-    <dc:date>2017-12-07</dc:date>
     <dc:identifier id="bookid">urn:uuid:68D67A93-9C8E-A648-B593-96D71D9E0CEA</dc:identifier>
-    <dc:language>ko</dc:language>
     <meta content="0.9.7" name="Sigil version"/>
     <meta content="cover.jpg" name="cover"/>
     <meta content="1" name="GBSProcVer"/>
     <meta content="GoogleEbooks" name="GBSEpubSource"/>
+    <dc:title>뱀과물 (Snake And Water)</dc:title>
+    <dc:creator opf:role="trl">Deborah Smith</dc:creator>
+    <dc:description><![CDATA[
+<p>A dystopian novel about totalitarianism.</p>
+<p>Published in 1949.</p>
+]]></dc:description>
+    <dc:subject>문학</dc:subject>
+    <dc:subject>꿈</dc:subject>
+    <dc:subject>몽환</dc:subject>
+    <dc:publisher>문학동네</dc:publisher>
+    <dc:date opf:event="publication">2025-05-01</dc:date>
+    <dc:date opf:event="modification">2025-06-05</dc:date>
+    <dc:rights>권리를 존중해주세요</dc:rights>
+    <dc:language>en</dc:language>
     <dc:creator opf:role="aut">Bad
 Author
 </dc:creator>

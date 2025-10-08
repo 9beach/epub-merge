@@ -31,7 +31,6 @@ sudo chmod a+rx /usr/local/bin/epub-merge /usr/local/bin/epub-meta
 - Reads, modifies, or removes metadata (e.g., title, author, language) in EPUB or OPF files.
 - Supports complex metadata (e.g., CDATA for descriptions).
 - Handles multiple authors or subjects (separated by `;`).
-- Processes standalone OPF files with `-O` flag.
 - Ensures clean output with MacOS BSD `sed` compatibility (e.g., removes trailing `--`).
 - Minimal dependencies: `zip`, `unzip`, and POSIX tools.
 
@@ -71,15 +70,6 @@ sudo chmod a+rx /usr/local/bin/epub-merge /usr/local/bin/epub-meta
 - Splits EPUBs merged by `epub-merge` into original files.
 - Restores original titles and TOC structures.
 - Standardizes OPF (`content.opf`), NCX (`toc.ncx`), and font directory (`fonts/`).
-
-### epub-meta
-
-**Metadata Editing**:
-
-- Modifies metadata fields (e.g., title, author, translator) in EPUB or OPF files.
-- Displays current metadata if no options are provided.
-- Supports CDATA for complex descriptions and multiple values (e.g., authors separated by `;`).
-- Processes standalone OPF files with `-O` flag.
 
 ## Manuals
 
@@ -171,7 +161,7 @@ NAME
 SYNOPSIS
      epub-meta [-t title] [-a author] [-r translator] [-x rights] [-i ISBN]
                [-s subject] [-l language] [-d description] [-p publisher]
-               [-u published] [-m modified] [-O] {epub-file | opf-file}
+               [-u published] [-m modified] {epub-file | opf-file}
 
 DESCRIPTION
      The epub-meta utility allows you to read, modify, or remove standard
@@ -201,10 +191,6 @@ DESCRIPTION
      -m modified
              Set modification date.
 
-     -O opf-file
-             Specify a standalone OPF file to edit instead of extracting it
-             from EPUB file.
-
      -p publisher
              Set publisher.
 
@@ -233,8 +219,8 @@ EXAMPLES
 
           epub-meta book.epub
           epub-meta -t 'Brave New World' -a 'Aldous Huxley' book.epub
-          epub-meta -O content.opf
-          epub-meta -O -t 'Brave New World' -a 'Aldous Huxley' content.opf
+          epub-meta content.opf
+          epub-meta -t 'Brave New World' -a 'Aldous Huxley' content.opf
 
      With CDATA description:
 
