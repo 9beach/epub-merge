@@ -1,6 +1,7 @@
 #!/bin/bash
 
 export DEBUG="${DEBUG:-}"
+export LANG="ko_KR"
 
 trap 'echo "Error (epub-meta): at line $LINENO" >&2' ERR INT TERM
 

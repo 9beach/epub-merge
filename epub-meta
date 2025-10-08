@@ -1,32 +1,25 @@
 #!/bin/bash
 
-# --- Runtime / Mode Flags
-
 DEBUG=${DEBUG:-}	 # Debug output toggle.
 QUIET="${QUIET:-}"	 # Suppress non-critical logs.
+
 edit_mode=false		 # If false, show metadata; if true, modify.
-
-# --- File paths
-
 epub_file=""             # Input EPUB file path.
 opf_file=""              # Input OPF file path (if given).
 epub_opf=""              # Path to OPF inside EPUB.
 temp_dir=""              # Temporary working directory.
 indent=""                # Indentation detected before </metadata>.
+opf_filter=""            # Regex to remove old tags before insertion.
+output_filter=""         # Regex for highlighting changed fields in output.
+readonly real_lf=$'\037' # Internal field separator for XML line handling.
 
-# Marker for deleting a field.
-readonly removing="<removed>"
+readonly removing="<removed>"       # Marker for deleting a field.
+readonly opf_header="header"        # Original OPF header path
+readonly new_opf_header="newhdr"    # Modified OPF header path
+readonly opf_footer="footer"        # OPF footer path
 
-# File containing the original OPF header (from <?xml to before </metadata>)
-readonly opf_header=".hdr"
 
-# File containing the modified OPF header
-readonly new_opf_header=".nhdr"
-
-# File containing the OPF footer (from </metadata> to the end of the file)
-readonly opf_footer=".ftr"
-
-# --- Option targets (new_* fields)
+# --- Values from args
 
 new_title=""
 new_author=""
@@ -42,11 +35,10 @@ new_modified=""
 
 # --- Label translations
 
-# Just my preference
-has_kr_lang="$(defaults read -g AppleLanguages 2> /dev/null \
-	| grep 'ko-' || true)"
+LANG_IS_KR="$(defaults read -g AppleLanguages 2> /dev/null \
+	| grep 'ko-' || true)" # Just my preference
 
-if [[ "${LANG:-ko_KR}" == ko* || -n "$has_kr_lang" ]]; then
+if [[ "${LANG:-ko_KR}" == ko* || -n "$LANG_IS_KR" ]]; then
 	readonly label_title="제목"
 	readonly label_author="작가"
 	readonly label_translator="번역"
@@ -71,14 +63,6 @@ else
 	readonly label_rights="Rights"
 	readonly label_isbn="ISBN"
 fi
-
-# --- Filters for selective tag replacement
-
-opf_filter=""            # Regex to remove old tags before insertion.
-output_filter=""         # Regex for highlighting changed fields in output.
-
-readonly real_lf=$'\037' # Internal field separator for XML line handling.
-
 
 # --- Utility functions
 
@@ -152,24 +136,25 @@ error() {
 check_file_type() {
 	# Quickly checks file type (XML or ZIP) by examining the first few 
 	# bytes.
-	local file="$1"
+	local file="$1" header_bytes
 	readonly zip_magic=$'PK\x03\x04' 
 	readonly xml_start='<?xml'
-	local header_bytes
 	header_bytes=$(head -c 4 "$1")
 
 	if [[ "$header_bytes" == "$zip_magic" ]]; then
 		epub_file="$(realpath "$1")"
+		readonly epub_file
 		return 0
 	fi
 
 	header_bytes=$(head -c 10 "$file")
 	if [[ "$header_bytes" == "$xml_start"* ]]; then
 		opf_file="$(realpath "$1")"
+		readonly opf_file
 		return 0
 	fi
 
-	error "Not a epub or OPF ($(basename "$1"))"
+	error "$(basename "$1"): not an EPUB or OPF file"
 }
 
 # --- XML handling helpers
@@ -177,7 +162,6 @@ check_file_type() {
 escape_xml() {
 	# Escape special XML characters and control chars.
 	# If input contains CDATA, keep it intact but flatten newlines to '\r'.
-	# Used in sed pattern, so too much escapes.
 	input="$1"
 
 	# If CDATA, return as-is
@@ -186,6 +170,7 @@ escape_xml() {
 		printf '%s' "$input" | tr '\n' '\r'
 		return
 	fi
+
 	# Otherwise, escape XML special chars and control characters
 	printf '%s' "$input" | tr '\n' '\r' | sed \
 		-e 's/&/\&amp;/g' \
@@ -197,7 +182,6 @@ escape_xml() {
 }
 
 unescape_xml() {
-	# Unescape XML entities and restore control characters.
 	sed -E \
 		-e 's/&#xD;//g' \
 		-e 's/&#13;//g' \
@@ -216,19 +200,19 @@ unescape_xml() {
 }
 
 join_lines() {
-	# Replace '\n' with unit separator (␟, 0x1F) for line-safe processing.
-	tr '\n' '\037' < "${1:-/dev/stdin}"
+	# Replace '\n' with unit separator for line-safe processing.
+	tr '\n' $real_lf < "${1:-/dev/stdin}"
 }
 
 split_lines() {
 	# Restore line structure: '\r' and '\037' → '\n\n'.
-	tr '\r\037' '\n\n' < "${1:-/dev/stdin}"
+	tr '\r'$real_lf '\n\n' < "${1:-/dev/stdin}"
 }
 
 split_xml_elements() {
 	# Convert self-closing <dc:*> tags to open-close, and place each 
 	# element (open/close) on its own line.
-	tr '\n' '\037' \
+	tr '\n' $real_lf \
 		| sed -E "
 		s#<dc:(title|publisher|subject|creator|description|rights|language|contributor|date|identifier)(/>|[[:blank:]]+[^>]*/>)#<dc:\1\2></dc:\1>#g;
 		s#(</dc:title[^>]*>|</dc:publisher[^>]*>|</dc:subject[^>]*>|</dc:creator[^>]*>|</dc:description[^>]*>|</dc:rights[^>]*>|</dc:language[^>]*>|</dc:contributor[^>]*>|</dc:identifier[^>]*>|</dc:date[^>]*>)#&\n#g;
@@ -269,12 +253,12 @@ show_tags() {
 	p
 	}" ${1:+"$1"} \
 	| sort -V \
-	| sed -E -e "s#</dc:.*##" -e 's#^..##' -e "s:^($label_author|$label_translator)(.* )\[Unknown\]$:\1\2:" \
+	| sed -E "s#</dc:.*##; s#^..##; s:^(.*) \[Unknown\]$:\1:" \
 	| grep -v "^[[:space:]]*<dc:.*" \
 	| unescape_xml
 }
 
-# --- OPF tag creation
+# --- Metadata edit
 
 echo_elements() {
 	# Create multi elements from 'display_name--sort_name' format and 
@@ -328,7 +312,8 @@ format_opf() {
 	#   - combine modified header and untouched footer,
 	#   - normalize line breaks,
 	#   - strip blank lines.
-	cat "$new_opf_header" "$opf_footer" | tr -d '\n' | split_lines | grep -v '^[[:blank:]]*$' | tr '\r' '\n'
+	cat "$new_opf_header" "$opf_footer" | tr -d '\n' | split_lines \
+		| grep -v '^[[:blank:]]*$' | tr '\r' '\n'
 }
 
 add_filters() {
@@ -385,7 +370,7 @@ build_modifying_filters() {
 	output_filter="${output_filter%?}"
 }
 
-# --- Here we go
+# --- Start main routine
 
 set -euo pipefail
 
@@ -413,6 +398,7 @@ while getopts "t:a:r:p:s:l:d:i:x:u:m:qh" opt; do
 		:) echo "Option -$OPTARG requires an argument." >&2; exit 1 ;;
 	esac
 done
+
 shift $((OPTIND-1))
 
 if [[ $# -ne 1 ]]; then
@@ -420,8 +406,6 @@ if [[ $# -ne 1 ]]; then
 fi
 
 check_file_type "$1"
-
-readonly epub_file
 
 if [[ -n "$epub_file" ]]; then
 	epub_opf="$(unzip -p "$epub_file" META-INF/container.xml \
@@ -441,21 +425,18 @@ if [[ "$edit_mode" == false ]]; then
 	else
 		cat "$opf_file"
 	fi \
-	| split_xml_elements \
-	| show_tags \
-	| split_lines
-
+	| split_xml_elements | show_tags | split_lines
 	exit 0
 fi
 
 # --- Edit metadata
 
+build_modifying_filters
+
 temp_dir=$(mktemp -d)
 readonly temp_dir
 
 cd "$temp_dir"
-
-build_modifying_filters
 
 if [[ -n "$opf_file" ]]; then
 	epub_opf="$temp_dir/.opf"
@@ -472,7 +453,8 @@ readonly indent
 
 # Before </metadata>: <?xml... -> $opf_header
 sed -E "s#(^.*)([[:blank:]]*</metadata>.*$)#\1#" "$epub_opf" \
-	| split_xml_elements > "$opf_header"
+	| split_xml_elements \
+	> "$opf_header"
 
 # From </metadata>: </metadata>...</package> -> $opf_footer
 sed -E "s#(^.*)(</metadata>.*$)#${real_lf}${indent}\2#" "$epub_opf" \
