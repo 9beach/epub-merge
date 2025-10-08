@@ -97,7 +97,9 @@ Usage:
             [-u published] [-m modified] {epub-file | opf-file}
 
 Options:
-  -a author      Set author(s) (e.g., "Tom Waits::Waits, Tom; Beck").
+  -a author      Set author(s). Multiple authors are allowed, separated by "//".
+                 Each author may optionally include a sort name, for example:
+                 "Tom Waits--Waits, Tom//Lily Allen--Allen, Lily//Beck".
   -d description Set description (supports CDATA).
   -i ISBN        Set ISBN.
   -l language    Set language (e.g., en, ko).
@@ -105,7 +107,7 @@ Options:
   -p publisher   Set publisher.
   -q             Quiet mode, suppress progress messages.
   -r translator  Set translator(s) (same format as -a).
-  -s subject     Set subject(s) (multiple separated by ';').
+  -s subject     Set subject(s) (multiple separated by '//').
   -t title       Set title.
   -u published   Set publication date (e.g., "2016-07-31").
   -x rights      Set rights/copyright info.
@@ -187,12 +189,12 @@ escape_xml() {
 	fi
 	# Otherwise, escape XML special chars and control characters
 	printf '%s' "$input" | tr '\n' '\r' | sed \
-		-e 's/&/\\\&amp;/g' \
-		-e 's/</\\\&lt;/g' \
-		-e 's/>/\\\&gt;/g' \
-		-e 's/"/\\\&quot;/g' \
-		-e "s/'/\\\&apos;/g" \
-		-e 's/#/\\\#/g' # `#` is delimeter of `sed`
+		-e 's/&/\&amp;/g' \
+		-e 's/</\&lt;/g' \
+		-e 's/>/\&gt;/g' \
+		-e 's/"/\&quot;/g' \
+		-e "s/'/\\&apos;/g" \
+		-e 's/#/\#/g' # `#` is delimeter of `sed` in the code.
 }
 
 unescape_xml() {
@@ -228,9 +230,11 @@ split_xml_elements() {
 	# Convert self-closing <dc:*> tags to open-close,
 	# and place each element (open/close) on its own line.
 	tr '\n' '\037' \
-		| sed -E "s#<dc:(title|publisher|subject|creator|description|rights|language|contributor|date|identifier)(/>|[[:blank:]]+[^>]*/>)#<dc:\1\2></dc:\1>#g" \
-		| sed -E 's#(</dc:title[^>]*>|</dc:publisher[^>]*>|</dc:subject[^>]*>|</dc:creator[^>]*>|</dc:description[^>]*>|</dc:rights[^>]*>|</dc:language[^>]*>|</dc:contributor[^>]*>|</dc:identifier[^>]*>|</dc:date[^>]*>)#&\n#g' \
-		| sed -E 's#(<dc:title[^>]*>|<dc:publisher[^>]*>|<dc:subject[^>]*>|<dc:creator[^>]*>|<dc:description[^>]*>|<dc:rights[^>]*>|<dc:language[^>]*>|<dc:contributor[^>]*>|<dc:identifier[^>]*>|<dc:date[^>]*>)#\n&#g'
+        | sed -E "
+	s#<dc:(title|publisher|subject|creator|description|rights|language|contributor|date|identifier)(/>|[[:blank:]]+[^>]*/>)#<dc:\1\2></dc:\1>#g;
+	s#(</dc:title[^>]*>|</dc:publisher[^>]*>|</dc:subject[^>]*>|</dc:creator[^>]*>|</dc:description[^>]*>|</dc:rights[^>]*>|</dc:language[^>]*>|</dc:contributor[^>]*>|</dc:identifier[^>]*>|</dc:date[^>]*>)#&\n#g;
+	s#(<dc:title[^>]*>|<dc:publisher[^>]*>|<dc:subject[^>]*>|<dc:creator[^>]*>|<dc:description[^>]*>|<dc:rights[^>]*>|<dc:language[^>]*>|<dc:contributor[^>]*>|<dc:identifier[^>]*>|<dc:date[^>]*>)#\n&#g
+	"
 }
 
 # --- Metadata display
@@ -266,7 +270,7 @@ show_tags() {
 	p
 	}" ${1:+"$1"} \
 	| sort -V \
-	| sed -E -e "s#</dc:.*##" -e 's:^..::' -e "s:^($label_author|$label_translator)(.* )\[Unknown\]$:\1\2:" \
+	| sed -E -e "s#</dc:.*##" -e 's#^..##' -e "s:^($label_author|$label_translator)(.* )\[Unknown\]$:\1\2:" \
 	| grep -v "^[[:space:]]*<dc:.*" \
 	| unescape_xml
 }
@@ -274,28 +278,25 @@ show_tags() {
 # --- OPF tag creation
 
 echo_elements() {
-	# Create multi elements from 'display_name::sort_name' format and 
-	# multi-entry (; separated).
+	# Create multi elements from 'display_name--sort_name' format and 
+	# multi-entry (// separated).
 	# Internal function of `make_new_tags()`
 	local new_content="$1"
 	local elements=""
-	IFS=';' read -ra name_array <<< "$new_content"
-	for name in "${name_array[@]}"; do
-		name="${name#"${name%%[![:blank:]]*}"}"  # ltrim
-		name="${name%"${name##*[![:blank:]]}"}"  # rtrim
+	local content_lines
+	content_lines=$(echo -E "$new_content" \
+		| sed -E 's#[[:space:]]*//[[:space:]]*#\n#g')
 
-		if [[ "$name" == *"::"* ]]; then
-			display_name="${name%%::*}"
-			sort_name="${name##*::}"
-			display_name="${display_name#"${display_name%%[![:blank:]]*}"}"
-			display_name="${display_name%"${display_name##*[![:blank:]]}"}"
-			sort_name="${sort_name#"${sort_name%%[![:blank:]]*}"}"
-			sort_name="${sort_name%"${sort_name##*[![:blank:]]}"}"
+	while IFS= read -r name; do
+		if [[ "$name" == *'--'* ]]; then
+			display_name="${name%%--*}"
+			sort_name="${name##*--}"
+
 			elements+="${sep}$indent$indent\n<${element}${attr_string} opf:file-as=\"$sort_name\">$display_name</$element>${sep}"
 		else
 			elements+="${sep}$indent$indent\n<${element}${attr_string}>$name</$element>${sep}"
 		fi
-	done
+	done <<< "$content_lines"
 
 	echo -e "${elements}"
 }

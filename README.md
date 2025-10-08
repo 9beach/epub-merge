@@ -30,7 +30,7 @@ sudo chmod a+rx /usr/local/bin/epub-merge /usr/local/bin/epub-meta
 
 - Reads, modifies, or removes metadata (e.g., title, author, language) in EPUB or OPF files.
 - Supports complex metadata (e.g., CDATA for descriptions).
-- Handles multiple authors or subjects (separated by `;`).
+- Handles multiple authors or subjects (separated by `//`).
 - Ensures clean output with MacOS BSD `sed` compatibility (e.g., removes trailing `--`).
 - Minimal dependencies: `zip`, `unzip`, and POSIX tools.
 
@@ -115,7 +115,7 @@ DESCRIPTION
      -v labels
              Set custom table of contents volume labels for each volume.
              Labels must be separated by semicolons, for example:
-             "Love;Peace;Hate".
+             "Love//Peace//Hate".
 
      -x      Extraction mode.  Split a merged ePUB back into its original
              component files.
@@ -175,9 +175,9 @@ DESCRIPTION
      The options are as follows:
 
      -a author
-             Set author(s). Multiple authors are allowed, separated by ';'.
+             Set author(s). Multiple authors are allowed, separated by "//".
              Each author may optionally include a sort name, for example:
-             "Tom Waits::Waits, Tom; Lily Allen::Allen, Lily; Beck".
+             "Tom Waits--Waits, Tom//Lily Allen--Allen, Lily//Beck".
 
      -d description
              Set description.
@@ -200,7 +200,7 @@ DESCRIPTION
              Set translator(s). Same format as -a.
 
      -s subject
-             Set subject(s). Multiple subjects are allowed, separated by ';'.
+             Set subject(s). Multiple subjects are allowed, separated by ''.
 
      -t title
              Set the book's title.

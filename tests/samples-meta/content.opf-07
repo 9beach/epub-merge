@@ -20,8 +20,7 @@
     <dc:rights>권리를 존중해주세요</dc:rights>
     <dc:language>en</dc:language>
     <dc:creator opf:role="aut">Bad
-Author
-</dc:creator>
+Author</dc:creator>
     <dc:creator opf:role="aut" opf:file-as="But has
 Lovely Name">Really Really
 Bad Author</dc:creator>
