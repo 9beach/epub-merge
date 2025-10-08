@@ -323,21 +323,6 @@ make_new_tags() {
 	fi
 }
 
-opf_matching_pattern() {
-	# Build regex pattern for matching dc:* element with optional attribute.
-	local element="$1"
-	local attr="${2:-}"
-	local value="${3:-}"
-	local attr_pattern=""
-
-	if [[ -n "$attr" && -n "$value" ]]; then
-		value_esc=$(printf '%s' "$value" | sed 's/["\]/\\&/g')
-		attr_pattern="[^>]*${attr}=[\"']${value_esc}[\"']"
-	fi
-
-	echo "<dc:${element}${attr_pattern}[^>]*>"
-}
-
 format_opf() {
 	# Rebuild the final OPF file:
 	#   - combine modified header and untouched footer,
@@ -346,62 +331,55 @@ format_opf() {
 	cat "$new_opf_header" "$opf_footer" | tr -d '\n' | split_lines | grep -v '^[[:blank:]]*$' | tr '\r' '\n'
 }
 
+add_filters() {
+        # Build filters for colorizing modified attributes and removing 
+        # old values
+	local element="$1"
+	local content="new_${4:-$1}"
+	local new_content="${!content}"
+	local label="label_${4:-$1}"
+	local attr="${2:-}"
+	local value="${3:-}"
+
+	if [[ -n "$new_content" ]]; then
+		# Build regex pattern for matching dc:* element with 
+		# optional attribute
+		local attr_pattern=""
+		if [[ -n "$attr" && -n "$value" ]]; then
+			local value_esc=$(printf '%s' "$value" \
+				| sed 's/["\]/\\&/g')
+			attr_pattern="[^>]*${attr}=[\"']${value_esc}[\"']"
+		fi
+
+		opf_filter+="<dc:${element}${attr_pattern}[^>]*>|"
+		output_filter+="^${!label}:.*|"
+	fi
+}
+
 build_output_filters() {
 	# These are used to remove specific XML elements and format output 
 	# messages.
 	#
 	# Example opf_filter: "<dc:publisher[^>]*>|<dc:subject[^>]*>"
 	# Example output_filter: "Publisher:.*|Subject:.*|Title:.*"
-	if [[ -n "$new_title" ]]; then
-		opf_filter+="$(opf_matching_pattern title)|"
-		output_filter+="$label_title:.*|"
-	fi
+	add_filters title
 	if [[ -n "$new_author" ]]; then
 		opf_filter+="<dc:creator[[:space:]]*>|"
-		opf_filter+="$(opf_matching_pattern creator opf:role aut)|"
-		output_filter+="$label_author:.*|"
 	fi
-	if [[ -n "$new_translator" ]]; then
-		opf_filter+="$(opf_matching_pattern creator opf:role trl)|"
-		opf_filter+="$(opf_matching_pattern contributor opf:role trl)|"
-		output_filter+="$label_translator:.*|"
-	fi
-	if [[ -n "$new_publisher" ]]; then
-		opf_filter+="$(opf_matching_pattern publisher)|"
-		output_filter+="$label_publisher:.*|"
-	fi
-	if [[ -n "$new_subject" ]]; then
-		opf_filter+="$(opf_matching_pattern subject)|"
-		output_filter+="$label_subject:.*|"
-	fi
-	if [[ -n "$new_language" ]]; then
-		opf_filter+="$(opf_matching_pattern language)|"
-		output_filter+="$label_language:.*|"
-	fi
-	if [[ -n "$new_description" ]]; then
-		opf_filter+="$(opf_matching_pattern description)|"
-		output_filter+="$label_description:.*|"
-	fi
-	if [[ -n "$new_isbn" ]]; then
-		opf_filter+="$(opf_matching_pattern identifier \
-			opf:scheme ISBN)|"
-		output_filter+="$label_isbn:.*|"
-	fi
-	if [[ -n "$new_rights" ]]; then
-		opf_filter+="$(opf_matching_pattern rights)|"
-		output_filter+="$label_rights:.*|"
-	fi
+	add_filters creator opf:role aut author
+	add_filters creator opf:role trl translator
+	add_filters translator opf:role trl translator
+	add_filters publisher
+	add_filters subject
+	add_filters language
+	add_filters description
+	add_filters identifier opf:scheme ISBN isbn
+	add_filters rights
 	if [[ -n "$new_published" ]]; then
 		opf_filter+="<dc:date[[:space:]]*>|"
-		opf_filter+="$(opf_matching_pattern date opf:event \
-			publication)|"
-		output_filter+="$label_published:.*|"
 	fi
-	if [[ -n "$new_modified" ]]; then
-		opf_filter+="$(opf_matching_pattern date opf:event \
-			modification)|"
-		output_filter+="$label_modified:.*|"
-	fi
+	add_filters date opf:event publication published
+	add_filters date opf:event modification modified
 
 	opf_filter="${opf_filter%?}"
 	output_filter="${output_filter%?}"
@@ -508,7 +486,7 @@ sed -E "s#(^.*)(</metadata>.*$)#${real_lf}${indent}\2#" "$epub_opf" \
 
 {
 	# Remove elements to be replaced
-	grep -E -v "${opf_filter}" "$opf_header"
+	grep -E -v "$opf_filter" "$opf_header"
 
 	# Print new elements
 	make_new_tags title
