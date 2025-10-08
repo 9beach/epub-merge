@@ -31,20 +31,6 @@ new_rights=""
 new_published=""
 new_modified=""
 
-# --- Label translations (auto-detected by locale)
-
-label_title=""
-label_author=""
-label_translator=""
-label_subject=""
-label_publisher=""
-label_language=""
-label_description=""
-label_published=""
-label_modified=""
-label_rights=""
-label_isbn=""
-
 # --- Label translations
 
 # Just my preference
