@@ -276,7 +276,7 @@ make_new_tags() {
 	local element="dc:$1"
 	local attr="${2:-}"
 	local value="${3:-}"
-	local content="new_${4:-$1}"                                          
+	local content="new_${4:-$1}"
 	local attr_string=""
 	local new_content="${!content}"
 
@@ -305,8 +305,8 @@ format_opf() {
 }
 
 add_filters() {
-        # Build filters for colorizing modified attributes and removing 
-        # old values
+	# Build filters for colorizing modified attributes and removing 
+	# old values
 	local element="$1"
 	local content="new_${4:-$1}"
 	local new_content="${!content}"

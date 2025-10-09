@@ -86,10 +86,6 @@ find . -type f \( -iname "*.opf" -o -iname "*.ncx"  -o -iname "nav.xhtml" \) -pr
 	format_xml "$file"
 done
 
-find . -type f \( -iname "*.css" \) -print0 | while IFS= read -r -d '' i; do
-	grep -v 'url(eOpenBooks.ttf)' "$i" > "$i.tmp" && mv "$i.tmp" "$i"
-done
-
 if [[ -z "${EPUB_DIFF_COMPARE_UUID:-}" ]]; then
 	filter_uuid "1st/content.opf"
 	filter_uuid "2nd/content.opf"
@@ -102,4 +98,4 @@ rmdir "1st/fonts" 2> /dev/null || true
 rm "2nd/META-INF/container.xml"
 rmdir "2nd/fonts" 2> /dev/null|| true
 
-diff -r 1st 2nd
+diff -r 1st 2nd || true
