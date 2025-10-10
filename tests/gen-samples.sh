@@ -2,13 +2,13 @@
 
 set -euo pipefail
 
-TEST_DIR="$(realpath "$(dirname "$0")")"
+test_dir="$(realpath "$(dirname "$0")")"
 
 epub_merge() {
-	"$TEST_DIR/../epub-merge" "$@"
+	"$test_dir/../epub-merge" "$@"
 }
 
-for dir in "$TEST_DIR/samples" "$TEST_DIR/samples-v3"; do
+for dir in "$test_dir/samples" "$test_dir/samples-v3"; do
 	cd "$dir"
 	cd merged
 	alias epub_merge=epub-merge
@@ -20,4 +20,6 @@ for dir in "$TEST_DIR/samples" "$TEST_DIR/samples-v3"; do
 		../original/sample2.epub
 	cd ../merged-lsp
 	epub_merge -qfl ko -s "번째 책" ../original/*.epub
+	cd ../merged-tv
+	epub_merge -fq -v "haha//hoho//heehee" -t "&&<>:/sample" ../original/*.epub
 done

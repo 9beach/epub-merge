@@ -150,10 +150,10 @@ for dir in "samples" "samples-v3"; do
 	########
 
 	tcd .title
-	echo "├── epub-merge test: -t, -n option"
+	echo "├── epub-merge test: -t, -v option"
 
-	epub_merge -q -n "test hahaha" -t "sample" ../original/*.epub
-	epub_diff "sample.epub" ../merged/sample.epub 
+	epub_merge -q -v "haha//hoho//heehee" -t "&&<>:/sample" ../original/*.epub
+	epub_diff "&&____sample.epub" "../merged/&&____sample.epub"
 
 	########
 

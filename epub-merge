@@ -421,14 +421,13 @@ parse_args() {
 			f) overwrite_existing=1 ;;
 			d) output_dir="$(realpath "$OPTARG")" ;;
 			n) epub_name="$OPTARG" ;;
-			v)
-				IFS=';' read -a _labels <<< "$OPTARG"
-				for l in "${_labels[@]}"; do
-					l="${l#"${l%%[![:space:]]*}"}"
-					l="${l%"${l##*[![:space:]]}"}"
-					toc_volume_labels+=("$l")
-				done
-				;;
+			v) label_lines=$(echo -E "$OPTARG" \
+				| sed -E "s#$sp*//$sp*#\n#g")
+			   while IFS= read -r l; do
+				l="${l#"${l%%[![:space:]]*}"}"
+				l="${l%"${l##*[![:space:]]}"}"
+				toc_volume_labels+=("$l")
+			   done <<< "$label_lines" ;;
 			t) epub_title="$OPTARG" ;;
 			l) epub_lang="$OPTARG" ;;
 			p) toc_volume_prefix="$OPTARG"
