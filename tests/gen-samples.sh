@@ -22,4 +22,5 @@ for dir in "$test_dir/samples" "$test_dir/samples-v3"; do
 	epub_merge -qfl ko -s "번째 책" ../original/*.epub
 	cd ../merged-tv
 	epub_merge -fq -v "haha//hoho//heehee" -t "&&<>:/sample" ../original/*.epub
+	mv '&&____sample.epub' sample.epub
 done

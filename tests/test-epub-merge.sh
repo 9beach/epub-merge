@@ -3,34 +3,34 @@
 set -euo pipefail
 
 export DEBUG="${DEBUG:-}"
-EPUB_MERGE_DIR="$(realpath "$(dirname "$0")/..")"
+epub_merge_dir="$(realpath "$(dirname "$0")/..")"
 
 trap 'echo "Error (epub-merge): at line $LINENO" >&2' ERR INT TERM
 
 cleanup() {
-	[[ -n "$TEMP_DIR" ]] && rm -fr "$TEMP_DIR" || true
+	[[ -n "$temp_dir" ]] && rm -fr "$temp_dir" || true
 }
 
 trap cleanup EXIT
 
 epub_diff() {
 	echo "│   ↳ $1 ── $2"
-	"$EPUB_MERGE_DIR/tests/epub-diff.sh" "$@"
+	"$epub_merge_dir/tests/epub-diff.sh" "$@"
 }
 
 epub_merge() {
-	"$EPUB_MERGE_DIR/epub-merge" "$@"
+	"$epub_merge_dir/epub-merge" "$@"
 }
 
 tcd() {
-	mkdir -p "$TEMP_DIR/$1"
-	cd "$TEMP_DIR/$1"
+	mkdir -p "$temp_dir/$1"
+	cd "$temp_dir/$1"
 }
 
-TEMP_DIR="$(mktemp -d)"
+temp_dir="$(mktemp -d)"
 
 for dir in "samples" "samples-v3"; do
-	SAMPLE_DIR="$EPUB_MERGE_DIR/tests/$dir"
+	SAMPLE_DIR="$epub_merge_dir/tests/$dir"
 
 	echo ".   epub-merge test: $dir"
 
@@ -38,7 +38,7 @@ for dir in "samples" "samples-v3"; do
 
 	echo ├── epub-merge test: setup
 
-	rsync -a --delete "$SAMPLE_DIR/" "$TEMP_DIR"
+	rsync -a --delete "$SAMPLE_DIR/" "$temp_dir"
 
 	########
 
@@ -153,7 +153,7 @@ for dir in "samples" "samples-v3"; do
 	echo "├── epub-merge test: -t, -v option"
 
 	epub_merge -q -v "haha//hoho//heehee" -t "&&<>:/sample" ../original/*.epub
-	epub_diff "&&____sample.epub" "../merged/&&____sample.epub"
+	epub_diff "&&____sample.epub" "../merged-tv/sample.epub"
 
 	########
 
