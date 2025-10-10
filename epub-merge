@@ -281,8 +281,7 @@ filter_dups() {
 		}
 	}
 
-	{ print }
-	'
+	{ print }'
 }
 
 # --- ePUB utility functions
