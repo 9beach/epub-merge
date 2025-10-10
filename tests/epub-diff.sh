@@ -1,38 +1,28 @@
 #!/usr/bin/env bash
 
+set -euo pipefail
+
+readonly uuid='[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}'
+
 if [ $# -lt 2 ]; then
 	echo "$(basename "$0") epub1 epub2"
 	exit 1
 fi
 
-set -euo pipefail
 trap 'echo "epub-diff error: at line $LINENO" >&2; cleanup' ERR INT TERM
+
+filter_uuid() {
+	if  [[ -f "$1" ]]; then
+		grep -Ev "$uuid" "$1" > "$1.no-uuid"
+		mv "$1.no-uuid" "$1"
+	fi
+}
 
 cleanup() {
 	[ -n "${temp_dir:-}" ] && rm -rf "$temp_dir"
 }
 
 trap cleanup EXIT
-
-if [[ "$OSTYPE" == "darwin"* ]]; then
-	sed_i() {
-		sed -i '' "$@"
-	}
-else
-	sed_i() {
-		sed -i "$@"
-	}
-fi
-
-readonly UUID='[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}'
-
-filter_uuid() {
-	if  [[ -f "$1" ]]; then
-		grep -Ev "($UUID|^[[:space:]]*$)" "$1" \
-			> "$1.no-uuid" || true
-		mv "$1.no-uuid" "$1"
-	fi
-}
 
 temp_dir=$(mktemp -d)
 readonly temp_dir
@@ -45,7 +35,8 @@ unzip -q "$2" -d "$temp_dir/2nd"
 
 cd "$temp_dir"
 
-if [[ -z "${EPUB_DIFF_COMPARE_UUID:-}" ]]; then
+if [[ -z "${COMPARE_UUID:-}" ]]; then
+	# epub-merge keeps these paths
 	filter_uuid "1st/content.opf"
 	filter_uuid "2nd/content.opf"
 	filter_uuid "1st/toc.ncx"
