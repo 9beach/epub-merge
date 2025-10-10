@@ -1,5 +1,49 @@
 #!/bin/bash
 
+set -euo pipefail
+
+readonly DEBUG=${DEBUG:-}
+
+epub_version=""
+opf_files=()
+ncx_files=()
+nav_files=()
+
+readonly merged_ncx_id="ncx"
+readonly merged_ncx="toc.ncx"
+first_ncx_id=""
+first_ncx=""
+
+readonly merged_nav_id="nav"
+readonly merged_nav="nav.xhtml"
+first_nav_id=""
+first_nav=""
+
+temp_dir=""
+temp_epub=""
+xml_formatter=""
+
+iconv_has_utf_8_mac="$(iconv -l | grep "UTF-8-MAC" || true)"
+readonly iconv_has_utf_8_mac
+
+# --- From args
+
+epub_files=() 
+output_dir="$(realpath "$(pwd)")"
+overwrite_existing=""
+toc_volume_prefix=""
+toc_volume_suffix=""
+toc_volume_given=""
+toc_volume_labels=()
+epub_name="" 
+epub_title=""
+epub_lang=""
+do_not_sort_params=""
+extract_mode=""
+quiet_mode=""
+
+# --- Utility functions
+
 show_usage() {
 	cat >&2 << 'EOF'
 epub-merge -- merge multiple ePUB files into one or extract merged ePUB
@@ -28,23 +72,15 @@ Notes:
 EOF
 }
 
-set -euo pipefail
-
-# Error handler for ERR, INT, and TERM signals
-trap 'printf "\033[31mError (epub-merge): at line $LINENO\033[0m\n" >&2; \
-	cleanup' ERR INT TERM
-
-# Cleanup temp files on exit
 cleanup() {
-	if [[ -f "${TEMP_EPUB:-}" ]]; then
-		rm -f "$TEMP_EPUB"
+	# Cleanup temp files on exit
+	if [[ -f "${temp_epub:-}" ]]; then
+		rm -f "$temp_epub"
 	fi
-	if [[ -d "${TEMP_DIR:-}" ]]; then
-		rm -rf "$TEMP_DIR"
+	if [[ -d "${temp_dir:-}" ]]; then
+		rm -rf "$temp_dir"
 	fi
 }
-
-trap cleanup EXIT
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
 	sed_i() {
@@ -56,65 +92,33 @@ else
 	}
 fi
 
-# Global variables
-OUTPUT_DIR="$(realpath "$(pwd)")"
-EPUB_VERSION=""
-EPUB_FILES=() 
-OPF_FILES=()
-NCX_FILES=()
-NAV_FILES=()
-
-FIRST_NCX_ID=""
-FIRST_NCX=""
-readonly MERGED_NCX_ID="ncx"
-readonly MERGED_NCX_FILE="toc.ncx"
-
-FIRST_NAV_ID=""
-FIRST_NAV=""
-readonly MERGED_NAV_ID="nav"
-readonly MERGED_NAV_FILE="nav.xhtml"
-
-TEMP_DIR=""
-TEMP_EPUB=""
-OVERWRITE_EXISTING=""
-TOC_VOLUME_PREFIX=""
-TOC_VOLUME_SUFFIX=""
-TOC_VOLUME_PREFIX_SUFFIX_GIVEN=""
-TOC_VOLUME_LABELS=()
-EPUB_NAME="" 
-EPUB_TITLE=""
-EPUB_LANG=""
-DO_NOT_SORT_PARAMS=""
-EXTRACT_MODE=""
-
-# --- Logging functions
-
-DEBUG=${DEBUG:-}
-QUIET="${QUIET:-}"
-
 log() {
-	if [[ -z "$QUIET" ]]; then
+	if [[ -z "$quiet_mode" ]]; then
 		printf '\033[90m%s\033[0m\n' "$*" >&2
 	fi
 }
 
 orange_log() {
-	if [[ -z "$QUIET" ]]; then
+	if [[ -z "$quiet_mode" ]]; then
 		printf '\033[38;5;208m%s\033[0m\n' "$*" >&2
 	fi
 }
 
 debug() {
+	# Print blue debug messages when DEBUG is enabled.
 	if [[ -n "$DEBUG" ]]; then
-		printf "\033[34m[DEBUG] ${BASH_LINENO[1]} %s\033[0m\n" "$*" >&2
+		printf "\033[34m[DEBUG] #${BASH_LINENO[1]} %s\033[0m\n" "$*" >&2
 	fi
 }
 
 debug_var() {
+	# Print blue debug messages of a variable when DEBUG is enabled.
+	# e.g., debug_var variable_name_without_dollar_prefix
 	debug "$1=\"${!1}\""
 }
 
 debug_func() {
+	# ${FUNCNAME[2]} / ${FUNCNAME[1]} → caller function / current function
 	if [ "${1:-}" != "$*" ]; then
 		local joined
 		joined=$(IFS=,; echo "$*")
@@ -125,36 +129,34 @@ debug_func() {
 }
 
 error() {
+	# Print red error message and exit.
 	printf "\033[31mError (epub-merge): %s\033[0m\n" "$*" >&2
 	exit 1
 }
 
 # --- XML utility functions
 
-XML_FORMATTER=""
-
 if command -v xmllint &> /dev/null; then
-	XML_FORMATTER="xmllint"
+	xml_formatter="xmllint"
 elif command -v python3 &> /dev/null; then
-	XML_FORMATTER="python3"
+	xml_formatter="python3"
 else
-	XML_FORMATTER="cat"
+	xml_formatter="cat"
 	log "The XML formatter is not installed, which may cause errors during the merge process. Please install xmllint."
 fi
 
-# Format XML/HTML file
-if [[ "$XML_FORMATTER" == "xmllint" ]]; then
+if [[ "$xml_formatter" == "xmllint" ]]; then
 	format_xml() {
 		local file="$1"
-		local temp_xml="$TEMP_DIR/.xml.XXXXX"
+		local temp_xml="$temp_dir/.xml.XXXXX"
 		xmllint --recover --format --noblanks "$file" \
 			> "${temp_xml}" 2>/dev/null \
 			&& mv "${temp_xml}" "$file"
 	}
-elif [[ "$XML_FORMATTER" == "python3" ]]; then
+elif [[ "$xml_formatter" == "python3" ]]; then
 	format_xml() {
 		local file="$1"
-		local temp_xml="$TEMP_DIR/.xml.XXXXX"
+		local temp_xml="$temp_dir/.xml.XXXXX"
 		python3 -c "import xml.dom.minidom as x,sys; print(x.parseString(open(sys.argv[1]).read()).toprettyxml(indent='    '))" "$file" 2>/dev/null \
 			| grep -v "^ *$" \
 			> "${temp_xml}" \
@@ -166,13 +168,13 @@ else
 	}
 fi
 
-# Split XML elements for easier processing
 split_xml() {
+	# Split XML elements for easier processing
 	tr -d '\n' < "${1:-/dev/stdin}" | sed 's/</\n</g'
 }
 
-# Extract attribute value from XML pattern
 get_xml_attr() {
+	# Extract attribute value from XML pattern
 	debug_func "$@"
 	local pattern="$1" attr="$2"
 
@@ -182,8 +184,18 @@ get_xml_attr() {
 	}" ${3:+"$3"}
 }
 
-# Escape XML characters
+escape_xml() {
+	# Escape special XML characters and control chars.
+	printf '%s' ${1:+"$1"} | sed \
+		-e 's/&/\&amp;/g' \
+		-e 's/</\&lt;/g' \
+		-e 's/>/\&gt;/g' \
+		-e 's/"/\&quot;/g' \
+		-e "s/'/\&apos;/g"
+}
+
 escape_xml_for_sed() {
+	# Escape special XML characters and control chars.
 	# Safe for `sed` replacement strings
 	printf '%s' "${1-}" | sed \
 		-e 's/\\/\\\\/g' \
@@ -195,17 +207,8 @@ escape_xml_for_sed() {
 		-e 's/\//\\\//g'
 }
 
-escape_xml() {
-	printf '%s' ${1:+"$1"} | sed \
-		-e 's/&/\&amp;/g' \
-		-e 's/</\&lt;/g' \
-		-e 's/>/\&gt;/g' \
-		-e 's/"/\&quot;/g' \
-		-e "s/'/\&apos;/g"
-}
-
-# Extract XML element by pattern
 get_xml_element() {
+	# Extract XML element by pattern
 	debug_func "$@"
 	local pattern="$1"
 
@@ -216,8 +219,8 @@ get_xml_element() {
 		}" ${2:+"$2"}
 }
 
-# Extract content between XML tags and modify paths/IDs
 extract_and_modify_xml() {
+	# Extract content between XML tags and modify paths/IDs
 	debug_func "$@"
 	local tag="$1" pattern="$2" dir="$3" suffix="$4"
 
@@ -230,16 +233,16 @@ extract_and_modify_xml() {
 	" ${5:+"$5"}
 }
 
-# Extract content before specified tag
 xml_grep_before_tag() {
+	# Extract content before specified tag
 	debug_func "$@"
 	local tag_name="$1"
 
 	sed -E "/<\/*${tag_name}[^>]*>/,\$d" ${2:+"$2"}
 }
 
-# Modify OPF metadata: replace title and append suffix('-0') to cover ID
 modify_opf_metadata() {
+	# Modify OPF metadata: replace title and append suffix('-0') to cover ID
 	debug_func "$@"
 	local epub_title="$1"
 	sed -E "
@@ -249,8 +252,9 @@ modify_opf_metadata() {
 	| grep -viE 'calibre:(series|title_sort)'
 }
 
-# Remove duplicate manifest font items from stdin (keep first occurrence only)
 filter_dups() {
+	# Remove duplicate manifest font items from stdin (keep first 
+	# occurrence only)
 	awk '
 	/<manifest/ { in_manifest = 1 }
 	/<\/manifest/ { in_manifest = 0; print; next }
@@ -278,8 +282,8 @@ filter_dups() {
 
 # --- ePUB utility functions
 
-# Get ePUB version from file
 get_version() {
+	# Get ePUB version from file
 	local epub="$1" opf_path
 	opf_path="$(unzip -p "$epub" META-INF/container.xml \
 		| get_xml_attr full-path full-path)"
@@ -294,8 +298,8 @@ get_version() {
 		| get_xml_attr 'package.*version' version
 }
 
-# Check system dependencies
 check_deps() {
+	# Check system dependencies
 	local missing_deps=()
 
 	for cmd in unzip zip uuidgen; do
@@ -310,8 +314,8 @@ check_deps() {
 	fi
 }
 
-# Extract common prefix from filenames
 get_prefix() {
+	# Extract common prefix from filenames
 	debug_func "$@"
 	local file1="$1" file2="$2"
 	local base1
@@ -332,13 +336,9 @@ get_prefix() {
 	echo "$common" | sed -e 's/[-_[( ]*$//' -e 's/ [0-9][0-9]*$//'
 }
 
-# Check if iconv supports UTF-8-MAC
-ICONV_HAS_UTF_8_MAC="$(iconv -l | grep "UTF-8-MAC" || true)"
-readonly ICONV_HAS_UTF_8_MAC
-
 # Convert to NFC encoding
 to_nfc(){
-	if [ -n "$ICONV_HAS_UTF_8_MAC" ]; then
+	if [ -n "$iconv_has_utf_8_mac" ]; then
 		iconv -f UTF-8-MAC -t UTF-8 "$1" > "$1.nfc" 2>/dev/null \
 			&& mv "$1.nfc" "$1"
 	fi
@@ -346,8 +346,8 @@ to_nfc(){
 
 # --- ePUB validation and processing functions
 
-# Validate ePUB structure
 validate_epub() {
+	# Validate ePUB structure
 	debug_func "$@"
 	local epub_file="$1" is_merged="${2:-}" temp_file
 	temp_file="$(mktemp)"
@@ -383,8 +383,8 @@ validate_epub() {
 	rm -f "$temp_file"
 }
 
-# Fix NCX playOrder attributes
 fix_playorder() {
+	# Fix NCX playOrder attributes
 	local mark_done="aqswde"
 	# Re-sequence playOrder attributes for proper navigation
 	awk -v regex="playOrder=\"[0-9][0-9]*\"" -v prefix="${mark_done}=\"" \
@@ -402,8 +402,8 @@ fix_playorder() {
 	| sed "s/${mark_done}/playOrder/g"
 }
 
-# Generate OPF header section
 gen_opf_header() {
+	# Generate OPF header section
 	debug_func "$@"
 	local opf_file="$1"
 	local epub_title="$2"
@@ -412,9 +412,9 @@ gen_opf_header() {
 		| modify_opf_metadata "$epub_title"
 }
 
-# Fix font paths for merged ePUB
-# ='path/to/myfont.TTF' -> ='fonts/myfont.TTF'
 fix_font_paths() {
+	# Fix font paths for merged ePUB
+	# ='path/to/myfont.TTF' -> ='fonts/myfont.TTF'
 	sed -E 's#href=["'"'"'].*/[^"'"'"']*/([^/]+\.(ttf|otf|woff|woff2|eot))["'"'"']#href="fonts/\1"#gi'
 }
 
@@ -423,44 +423,44 @@ safe_filename() {
 }
 
 # --- Command line parsing and validation
-# Writes: many variables
+
 parse_args() {
 	while getopts "n:t:l:p:v:s:d:fOqx" opt; do
 		case "$opt" in
-			f) OVERWRITE_EXISTING=1 ;;
-			d) OUTPUT_DIR="$(realpath "$OPTARG")" ;;
-			n) EPUB_NAME="$OPTARG" ;;
+			f) overwrite_existing=1 ;;
+			d) output_dir="$(realpath "$OPTARG")" ;;
+			n) epub_name="$OPTARG" ;;
 			v)
 				IFS=';' read -a _labels <<< "$OPTARG"
 				for l in "${_labels[@]}"; do
 					l="${l#"${l%%[![:space:]]*}"}"
 					l="${l%"${l##*[![:space:]]}"}"
-					TOC_VOLUME_LABELS+=("$l")
+					toc_volume_labels+=("$l")
 				done
 				;;
-			t) EPUB_TITLE="$OPTARG" ;;
-			l) EPUB_LANG="$OPTARG" ;;
-			p) TOC_VOLUME_PREFIX="$OPTARG"
-			   TOC_VOLUME_PREFIX_SUFFIX_GIVEN=1 ;;
-			s) TOC_VOLUME_SUFFIX="$OPTARG"
-			   TOC_VOLUME_PREFIX_SUFFIX_GIVEN=1 ;;
-			O) DO_NOT_SORT_PARAMS=1 ;;
-			q) QUIET=1 ;;
-			x) EXTRACT_MODE=1 ;;
+			t) epub_title="$OPTARG" ;;
+			l) epub_lang="$OPTARG" ;;
+			p) toc_volume_prefix="$OPTARG"
+			   toc_volume_given=1 ;;
+			s) toc_volume_suffix="$OPTARG"
+			   toc_volume_given=1 ;;
+			O) do_not_sort_params=1 ;;
+			q) quiet_mode=1 ;;
+			x) extract_mode=1 ;;
 			\?) show_usage; exit 1 ;;
 		esac
 	done
 
-	readonly OUTPUT_DIR
-	readonly OVERWRITE_EXISTING
-	readonly DO_NOT_SORT_PARAMS
-	readonly QUIET
-	readonly EXTRACT_MODE
-	readonly TOC_VOLUME_PREFIX_SUFFIX_GIVEN
+	readonly output_dir
+	readonly overwrite_existing
+	readonly do_not_sort_params
+	readonly quiet_mode
+	readonly extract_mode
+	readonly toc_volume_given
 }
 
 validate_args() {
-	if [[ -n "$EXTRACT_MODE" ]]; then
+	if [[ -n "$extract_mode" ]]; then
 		if [[ $# -ne 1 ]]; then
 			show_usage
 			exit 1
@@ -475,53 +475,52 @@ validate_args() {
 	done
 }
 
-# Generate output filename and title from input files
 gen_output_names() {
-	EPUB_NAME="${EPUB_TITLE:-$EPUB_NAME}"
-	if [[ -z "$EPUB_NAME" ]]; then
-		EPUB_NAME="$(get_prefix "$(basename "$1")" "$(basename "$2")")"
+	# Generate output filename and title from input files
+	epub_name="${epub_title:-$epub_name}"
+	if [[ -z "$epub_name" ]]; then
+		epub_name="$(get_prefix "$(basename "$1")" "$(basename "$2")")"
 	fi
 
-	if [[ -z "$EPUB_NAME" ]]; then
+	if [[ -z "$epub_name" ]]; then
 		error "Cannot determine output name from '$1' and '$2'.\nPlease use -n option"
 	fi
 
-	EPUB_TITLE="${EPUB_TITLE:-$EPUB_NAME}"
+	epub_title="${EPUB_TITLE:-$epub_name}"
 
-	EPUB_NAME="$(safe_filename "$EPUB_NAME")"
-	EPUB_TITLE="$(escape_xml_for_sed "$EPUB_TITLE")"
+	epub_name="$(safe_filename "$epub_name")"
+	epub_title="$(escape_xml_for_sed "$epub_title")"
 
-	if [[ $OVERWRITE_EXISTING != 1 && -f "$EPUB_NAME.epub" ]]; then
-		error "$EPUB_NAME.epub: already exists"
+	if [[ $overwrite_existing != 1 && -f "$epub_name.epub" ]]; then
+		error "$epub_name.epub: already exists"
 	fi
 }
 
-# Sort input files naturally unless disabled
 sort_files() {
-	if [[ -n "${DO_NOT_SORT_PARAMS:-}" ]]; then
-		EPUB_FILES=("$@")
+	# Sort input files naturally unless disabled
+	if [[ -n "${do_not_sort_params:-}" ]]; then
+		epub_files=("$@")
 	else
 		local sorted_files=()
 		while IFS= read -r -d '' file; do
 			sorted_files+=("$file")
 		done < <(printf "%s\0" "$@" | sort -zV)
-		EPUB_FILES=("${sorted_files[@]}")
+		epub_files=("${sorted_files[@]}")
 	fi
 }
 
-# Extract all ePUB files to numbered directories
 extract_files() {
-	for i in "${!EPUB_FILES[@]}"; do
-		log "Extracting ${EPUB_FILES[i]}"
-		mkdir -p "$TEMP_DIR/$i"
-		unzip -q "${EPUB_FILES[i]}" -d "$TEMP_DIR/$i" \
-			|| error "Failed to extract '${EPUB_FILES[i]}'"
+	# Extract all ePUB files to numbered directories
+	for i in "${!epub_files[@]}"; do
+		log "Extracting ${epub_files[i]}"
+		mkdir -p "$temp_dir/$i"
+		unzip -q "${epub_files[i]}" -d "$temp_dir/$i" \
+			|| error "Failed to extract '${epub_files[i]}'"
 	done
 }
 
-# Detect language from OPF content
-# # Detect language from OPF content
 detect_language() {
+	# Detect language from OPF content
 	debug_func "$@"
 	local opf_file="$1" lang="$2"
 
@@ -556,10 +555,10 @@ detect_language() {
 	esac
 }
 
-# Collect OPF/NCX/NAV file paths, and format XML
 collect_file_paths_and_format_xml() {
-	for i in "${!EPUB_FILES[@]}"; do
-		local cur_epub="${EPUB_FILES[i]}"
+	# Collect OPF/NCX/NAV file paths, and format XML
+	for i in "${!epub_files[@]}"; do
+		local cur_epub="${epub_files[i]}"
 
 		# Get OPF path
 		local cur_opf opf_dir cur_ncx cur_nav
@@ -575,7 +574,7 @@ collect_file_paths_and_format_xml() {
 
 		format_xml "$cur_opf"
 
-		OPF_FILES[i]="$cur_opf"
+		opf_files[i]="$cur_opf"
 
 		# Get NCX
 		cur_ncx="$(get_xml_attr "x-dtbncx" "href" "$cur_opf")"
@@ -587,15 +586,15 @@ collect_file_paths_and_format_xml() {
 			cur_ncx=""
 		fi
 
-		if [[ -z "$FIRST_NCX_ID" && -n "$cur_ncx" ]]; then
-			FIRST_NCX_ID="$(get_xml_attr \
+		if [[ -z "$first_ncx_id" && -n "$cur_ncx" ]]; then
+			first_ncx_id="$(get_xml_attr \
 				"$cur_ncx" "id" "$cur_opf")"
-			FIRST_NCX="$i/$opf_dir/$cur_ncx"
+			first_ncx="$i/$opf_dir/$cur_ncx"
 		fi
 
-		NCX_FILES[i]="${cur_ncx:+$i/$opf_dir/$cur_ncx}"
+		ncx_files[i]="${cur_ncx:+$i/$opf_dir/$cur_ncx}"
 
-		[[ $EPUB_VERSION == "2.0" ]] && continue
+		[[ $epub_version == "2.0" ]] && continue
 
 		# Get NAV (ePUB 3.0 only)
 		cur_nav="$(get_xml_attr \
@@ -607,24 +606,24 @@ collect_file_paths_and_format_xml() {
 			format_xml "$i/$opf_dir/$cur_nav"
 		fi
 
-		if [[ -z "$FIRST_NAV_ID" && -n "$cur_nav" ]]; then
-			FIRST_NAV_ID="$(get_xml_attr \
+		if [[ -z "$first_nav_id" && -n "$cur_nav" ]]; then
+			first_nav_id="$(get_xml_attr \
 				"$cur_nav" "id" "$cur_opf")"
-			FIRST_NAV="$i/$opf_dir/$cur_nav"
+			first_nav="$i/$opf_dir/$cur_nav"
 		fi
 
-		NAV_FILES[i]="${cur_nav:+$i/$opf_dir/$cur_nav}"
+		nav_files[i]="${cur_nav:+$i/$opf_dir/$cur_nav}"
 	done
 }
 
-# Detect volume labels based on language
 detect_volume_labels() {
+	# Detect volume labels based on language
 	debug_func
-	local lang="$EPUB_LANG"
-	local prefix="$TOC_VOLUME_PREFIX"
-	local suffix="$TOC_VOLUME_SUFFIX"
+	local lang="$epub_lang"
+	local prefix="$toc_volume_prefix"
+	local suffix="$toc_volume_suffix"
 
-	if [[ -n "$TOC_VOLUME_PREFIX_SUFFIX_GIVEN" ]]; then
+	if [[ -n "$toc_volume_given" ]]; then
 		return
 	fi
 
@@ -651,12 +650,12 @@ detect_volume_labels() {
 		esac
 	fi
 
-	TOC_VOLUME_PREFIX="$prefix"
-	TOC_VOLUME_SUFFIX="$suffix"
+	toc_volume_prefix="$prefix"
+	toc_volume_suffix="$suffix"
 }
 
-# Setup base ePUB structure from first file
 setup_base() {
+	# Setup base ePUB structure from first file
 	debug_func
 	local first_extract="0"
 
@@ -689,40 +688,40 @@ EOF
 	fi
 }
 
-readonly SED_REMOVE_DOT_PATH='s#(["/])\./#\1#g'
-readonly SED_REMOVE_DOTDOT_PATH="s#/[^/][^/]*/\.\./#/#g"
-readonly UUID_PATTERN='[0-9a-fA-F]\{8\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{12\}'
+readonly sed_remove_dot_path='s#(["/])\./#\1#g'
+readonly sed_remove_dotdot_path="s#/[^/][^/]*/\.\./#/#g"
+readonly uuid_pattern='[0-9a-fA-F]\{8\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{12\}'
 
 merge_ncxs() {
 	debug_func "$@"
 	local uuid="$1"
 
-	[[ -z "$FIRST_NCX" ]] && return 0
+	[[ -z "$first_ncx" ]] && return 0
 
-	local prefix="$TOC_VOLUME_PREFIX"
-	local suffix="$TOC_VOLUME_SUFFIX"
-	local toc_file="$MERGED_NCX_FILE"
+	local prefix="$toc_volume_prefix"
+	local suffix="$toc_volume_suffix"
+	local toc_file="$merged_ncx"
 
 	# Initialize NCX with header
 	{
-		xml_grep_before_tag navMap "$FIRST_NCX" \
-			| sed -e "s/$UUID_PATTERN/$uuid/"
+		xml_grep_before_tag navMap "$first_ncx" \
+			| sed -e "s/$uuid_pattern/$uuid/"
 		echo "  <navMap>"
-	}  > "$toc_file"
+	} > "$toc_file"
 
 	# Process each volume
-	for i in "${!EPUB_FILES[@]}"; do
-		debug_var NCX_FILES[i]
-		[[ -z "${NCX_FILES[i]:-}" ]] && continue
+	for i in "${!epub_files[@]}"; do
+		debug_var ncx_files[i]
+		[[ -z "${ncx_files[i]:-}" ]] && continue
 
 		local cur_ncx cur_ncx_dir volume_num
 
-		cur_ncx="${NCX_FILES[i]}"
+		cur_ncx="${ncx_files[i]}"
 		cur_ncx_dir="$(dirname "$cur_ncx")"
 		volume_num=$((i + 1))
 
-		if [[ -n "${TOC_VOLUME_LABELS[i]:-}" ]]; then
-			local label="${TOC_VOLUME_LABELS[i]}"
+		if [[ -n "${toc_volume_labels[i]:-}" ]]; then
+			local label="${toc_volume_labels[i]}"
 		else
 			local label="$prefix$volume_num$suffix"
 		fi
@@ -747,8 +746,8 @@ EOF
 	done \
 	| fix_playorder \
 	| sed -E "
-	$SED_REMOVE_DOT_PATH
-	$SED_REMOVE_DOTDOT_PATH" \
+	$sed_remove_dot_path
+	$sed_remove_dotdot_path" \
 	>> "$toc_file"
 
 	echo -e "  </navMap>\n</ncx>" >> "$toc_file"
@@ -756,39 +755,39 @@ EOF
 	format_xml "$toc_file"
 }
 
-# Merge NAV files for ePUB 3.0
 merge_navs() {
+	# Merge NAV files for ePUB 3.0
 	debug_func
 	# No nav
-	[[ -z "$FIRST_NAV" ]] && return 0
+	[[ -z "$first_nav" ]] && return 0
 
-	local prefix="$TOC_VOLUME_PREFIX"
-	local suffix="$TOC_VOLUME_SUFFIX"
-	local nav_file="$MERGED_NAV_FILE"
+	local prefix="$toc_volume_prefix"
+	local suffix="$toc_volume_suffix"
+	local nav_file="$merged_nav"
 
 	# Initialize NAV with header
 	{
-		xml_grep_before_tag body "$FIRST_NAV" \
-			| sed "s#href=.#&$(dirname "$FIRST_NAV")/#" 
+		xml_grep_before_tag body "$first_nav" \
+			| sed "s#href=.#&$(dirname "$first_nav")/#" 
 		echo '<body>'
 		echo '<nav epub:type="toc">'
-		echo "<h1>$EPUB_TITLE</h1><ol>"
+		echo "<h1>$epub_title</h1><ol>"
 	} > "$nav_file"
 
 	# Process each volume
-	for i in "${!EPUB_FILES[@]}"; do
-		debug "NAV_FILES[$i]=\"${NAV_FILES[i]:-}\""
-		[[ -z "${NAV_FILES[i]:-}" ]] && continue
+	for i in "${!epub_files[@]}"; do
+		debug "nav_files[$i]=\"${nav_files[i]:-}\""
+		[[ -z "${nav_files[i]:-}" ]] && continue
 
 		local cur_nav cur_nav_dir volume_num ref
 
-		cur_nav="${NAV_FILES[i]}"
+		cur_nav="${nav_files[i]}"
 		cur_nav_dir="$(dirname "$cur_nav")"
 		volume_num=$((i + 1))
 
 		ref="$cur_nav_dir/$(get_xml_attr "a[[:space:]]*href" "href" "$cur_nav")"
-		if [[ -n "${TOC_VOLUME_LABELS[i]:-}" ]]; then
-			local label="${TOC_VOLUME_LABELS[i]}"
+		if [[ -n "${toc_volume_labels[i]:-}" ]]; then
+			local label="${toc_volume_labels[i]}"
 		else
 			local label="$prefix$volume_num$suffix"
 		fi
@@ -806,27 +805,27 @@ merge_navs() {
 	# Close NAV structure
 	echo -e '</ol></nav>\n</body>\n</html>' >> "$nav_file"
 	sed_i -E "
-	$SED_REMOVE_DOT_PATH
-	$SED_REMOVE_DOTDOT_PATH
+	$sed_remove_dot_path
+	$sed_remove_dotdot_path
 	" "$nav_file" "$nav_file"
 	format_xml "$nav_file"
 }
 
-# Merge all OPF manifests and spines
 merge_opfs() {
+	# Merge all OPF manifests and spines
 	debug_func "$@"
 	local uuid="$1"
 	local manifest_file="content.opf.manifest"
 	local spine_file="content.opf.spine"
 
 	# Initialize OPF with header
-	gen_opf_header "${OPF_FILES[0]}" "$EPUB_TITLE" \
-		| sed "s/$UUID_PATTERN/$uuid/" \
+	gen_opf_header "${opf_files[0]}" "$epub_title" \
+		| sed "s/$uuid_pattern/$uuid/" \
 		> "content.opf"
 
 	# Process each volume for manifest and spine
-	for i in "${!EPUB_FILES[@]}"; do
-		cur_opf="${OPF_FILES[i]}"
+	for i in "${!epub_files[@]}"; do
+		cur_opf="${opf_files[i]}"
 		cur_opf_dir="$(dirname "$cur_opf")"
 
 		# Extract and modify spine entries
@@ -847,9 +846,9 @@ merge_opfs() {
 	# Assemble final OPF
 	{
 		echo "  <manifest>"
-		if [[ -n "$FIRST_NAV" ]]; then
+		if [[ -n "$first_nav" ]]; then
 			# Add only one nav property
-			echo "<item id=\"$MERGED_NAV_ID\" href=\"$MERGED_NAV_FILE\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>"
+			echo "<item id=\"$merged_nav_id\" href=\"$merged_nav\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>"
 		fi
 
 		# Remove all nav properties
@@ -857,8 +856,8 @@ merge_opfs() {
 
 		echo "  </manifest>"
 
-		if [[ -n "$FIRST_NCX" ]]; then
-			echo "<spine toc=\"$MERGED_NCX_ID\">"
+		if [[ -n "$first_ncx" ]]; then
+			echo "<spine toc=\"$merged_ncx_id\">"
 		else
 			echo "<spine>"
 		fi
@@ -867,11 +866,11 @@ merge_opfs() {
 		echo -e "  </spine>\n</package>"
 	} \
 	| sed -E "
-	s:\"0/[^\"']*\.ncx\":\"$MERGED_NCX_FILE\":
-	s:\"${FIRST_NCX_ID}-0\":\"$MERGED_NCX_ID\":
-	s:\"${FIRST_NCX_ID}\":\"$MERGED_NCX_ID\":
-	$SED_REMOVE_DOTDOT_PATH
-	$SED_REMOVE_DOT_PATH
+	s:\"0/[^\"']*\.ncx\":\"$merged_ncx\":
+	s:\"${first_ncx_id}-0\":\"$merged_ncx_id\":
+	s:\"${first_ncx_id}\":\"$merged_ncx_id\":
+	$sed_remove_dotdot_path
+	$sed_remove_dot_path
 	" \
 	| fix_font_paths \
 	| filter_dups \
@@ -884,8 +883,8 @@ merge_opfs() {
 	rm -f "$manifest_file" "$spine_file"
 }
 
-# Backup original files for splitting
 backup_originals() {
+	# Backup original files for splitting
 	debug_func
 	mkdir -p .epub-merge
 
@@ -897,10 +896,10 @@ backup_originals() {
 		echo "${path}/" | sed -E "s:^$idx/::; s://:/:; s:^$:.:"
 	}
 
-	for i in "${!EPUB_FILES[@]}"; do
-		local cur_opf="${OPF_FILES[i]}"
-		local cur_ncx="${NCX_FILES[i]:-$no_ncx}"
-		local cur_nav="${NAV_FILES[i]:-$no_nav}"
+	for i in "${!epub_files[@]}"; do
+		local cur_opf="${opf_files[i]}"
+		local cur_ncx="${ncx_files[i]:-$no_ncx}"
+		local cur_nav="${nav_files[i]:-$no_nav}"
 
 		local new_opf_dir new_ncx_dir new_nav_dir
 		new_opf_dir=$(adjust_path "$(dirname "$cur_opf")" "$i")
@@ -919,9 +918,9 @@ backup_originals() {
 		sed -E "
 		s:<(item|reference).*href=[\"']:&$new_opf_dir/:g
 		s:(<(item|reference).*href=.*)(//):\1/:
-		$SED_REMOVE_DOT_PATH
+		$sed_remove_dot_path
 		s:href=\"[^\"]*\.ncx\":href=\"toc.ncx\":
-		s:href=\"[^\"]*$(basename "$cur_nav")\":href=\"$MERGED_NAV_FILE\":
+		s:href=\"[^\"]*$(basename "$cur_nav")\":href=\"$merged_nav\":
 		s:[\"']${cur_ncx_id}[\"']:\"ncx\":" "$cur_opf" \
 		| fix_font_paths \
 		> ".epub-merge/$i.opf"
@@ -932,8 +931,8 @@ backup_originals() {
 			sed -E "
 			s:src=\":&$new_ncx_dir/:g
 			s:(src=.*)(//):\1/:
-			s:src=\"[^\"]*$(basename "$cur_nav")\":href=\"$MERGED_NAV_FILE\":
-			$SED_REMOVE_DOT_PATH" "$cur_ncx" \
+			s:src=\"[^\"]*$(basename "$cur_nav")\":href=\"$merged_nav\":
+			$sed_remove_dot_path" "$cur_ncx" \
 			> ".epub-merge/$i.ncx"
 		fi
 
@@ -943,20 +942,20 @@ backup_originals() {
 			sed -E "
 			s:(href=\")([^#]):\1$new_nav_dir/\2:g
 			s:(href=.*)(//):\1/:
-			s:href=\"[^\"]*$(basename "$cur_nav")\":href=\"$MERGED_NAV_FILE\":
-			$SED_REMOVE_DOT_PATH
-			$SED_REMOVE_DOTDOT_PATH" "$cur_nav" \
+			s:href=\"[^\"]*$(basename "$cur_nav")\":href=\"$merged_nav\":
+			$sed_remove_dot_path
+			$sed_remove_dotdot_path" "$cur_nav" \
 			> ".epub-merge/$i.nav"
 		fi
 
 		# Filename
-		basename "${EPUB_FILES[i]}" > ".epub-merge/$i.name"
+		basename "${epub_files[i]}" > ".epub-merge/$i.name"
 		to_nfc ".epub-merge/$i.name"
 	done
 }
 
-# Consolidate merged archive, and remove unused consolidate_merged() {
 consolidate_merged() {
+	# Consolidate merged archive, and remove unused
 	debug_func "*@"
 	# Move all font files to central location
 	mkdir fonts
@@ -973,8 +972,8 @@ consolidate_merged() {
 	find [0-9]* -type d -empty -delete || true
 }
 
-# Calculate relative path to root
 path_to_root() {
+	# Calculate relative path to root
 	local parent
 	parent="$(dirname "$1" | sed 's:^\./::')"
 
@@ -986,16 +985,16 @@ path_to_root() {
 	fi
 }
 
-# Update CSS font URLs for merged ePUB
-# Merged, so one depth more
 fix_fontpaths_to_root() {
+	# Update CSS font URLs for merged ePUB
+	# Merged, so one depth more
 	local rpath
 	rpath="$(path_to_root "$1")"
 	sed_i -E "s#url[[:space:]]*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url(${rpath}/fonts/\\1)#i" "$1"
 }
 
-# Calculate relative path to trunk (one level below root)
 path_to_trunk() {
+	# Calculate relative path to trunk (one level below root)
 	local parent
 	parent="$(dirname "$(dirname "$1" | sed -e 's:^\./::')")"
 
@@ -1006,24 +1005,24 @@ path_to_trunk() {
 	fi
 }
 
-# Update CSS font URLs for split ePUBs
-# Trunk dirs(0, 1, 2, ...) are now root
 fix_fontpaths_to_trunk() {
+	# Update CSS font URLs for split ePUBs
+	# Trunk dirs(0, 1, 2, ...) are now root
 	local rpath
 	rpath="$(path_to_trunk "$1")"
 	sed_i -E "s#url[[:space:]]*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url(${rpath}fonts/\\1)#i" "$1"
 }
 
-# Update CSS font URLs for split ePUB (digits/path -> ../fonts/)
 update_css_fonts_for_split() {
+	# Update CSS font URLs for split ePUB (digits/path -> ../fonts/)
 	debug_func "*@"
 	find . -type f -iname "*.css" -print0 | while IFS= read -r -d '' css; do
 		fix_fontpaths_to_trunk "$css"
 	done
 }
 
-# Update CSS font URLs for merged ePUB (paths -> fonts/)
 update_css_fonts_for_merge() {
+	# Update CSS font URLs for merged ePUB (paths -> fonts/)
 	debug_func "*@"
 	find . -type f -iname "*.css" -print0 | while IFS= read -r -d '' css; do
 		# New path from css to font is the concatenation of path from 
@@ -1032,8 +1031,8 @@ update_css_fonts_for_merge() {
 	done
 }
 
-# Create final ePUB file
 create_final_epub() {
+	# Create final ePUB file
 	debug_func "$@"
 	local output_realpath="$1"
 	local working_dir="$2"
@@ -1041,22 +1040,22 @@ create_final_epub() {
 
 	# Package ePUB with proper compression
 	cd "$working_dir" > /dev/null
-	rm -f "$TEMP_EPUB"
-	zip -q -X0 "$TEMP_EPUB" mimetype
-	zip -q -Xr9D "$TEMP_EPUB" . -x mimetype -x "*/.DS_Store" -x "__MACOSX/*"
+	rm -f "$temp_epub"
+	zip -q -X0 "$temp_epub" mimetype
+	zip -q -Xr9D "$temp_epub" . -x mimetype -x "*/.DS_Store" -x "__MACOSX/*"
 
 	if [[ -n "$fonts_parent_dir" ]]; then
 		debug_var fonts_parent_dir
 		cd - > /dev/null
 		cd "$fonts_parent_dir/" > /dev/null
 		if [[ -d "$fonts_parent_dir/fonts" ]]; then
-			zip -q -r "$TEMP_EPUB" "fonts/"
+			zip -q -r "$temp_epub" "fonts/"
 		fi
 		cd - > /dev/null
 	fi
 
 	cd - > /dev/null
-	if mv -f "$TEMP_EPUB" "$output_realpath"; then
+	if mv -f "$temp_epub" "$output_realpath"; then
 		log "$(basename "$output_realpath"): successfully created"
 		return 0
 	else
@@ -1065,8 +1064,8 @@ create_final_epub() {
 	fi
 }
 
-# Create individual ePUB files from extracted merged ePUB
 create_individual_epubs() {
+	# Create individual ePUB files from extracted merged ePUB
 	local status=0
 	local count
 	local toc_file="toc.ncx"
@@ -1082,8 +1081,8 @@ create_individual_epubs() {
 		local cur_epub
 		cur_epub="$(cat ".epub-merge/$i.name")"
 
-		if [[ $OVERWRITE_EXISTING != 1 && \
-			-f "$OUTPUT_DIR/$cur_epub" ]]; then
+		if [[ $overwrite_existing != 1 && \
+			-f "$output_dir/$cur_epub" ]]; then
 			status=1
 			orange_log "$cur_epub: already exists"
 			continue
@@ -1106,36 +1105,36 @@ create_individual_epubs() {
 		if [[ $different_fonts == 1 ]]; then
 			mkdir "$i/fonts"
 			sed "s#.*#cp \"&\" $i/fonts/#" .fonts-list | bash - 
-			if ! create_final_epub "$OUTPUT_DIR/$cur_epub" "$i/"; then
+			if ! create_final_epub "$output_dir/$cur_epub" "$i/"; then
 				status=1
 			fi
 			rmdir fonts 2>/dev/null || true
 		else
-			if ! create_final_epub "$OUTPUT_DIR/$cur_epub" "$i/" "."; then
+			if ! create_final_epub "$output_dir/$cur_epub" "$i/" "."; then
 				status=1
 			fi
 		fi
 
-		cd "$TEMP_DIR" > /dev/null
+		cd "$temp_dir" > /dev/null
 	done
 
 	return $status
 }
 
-# Extract merged ePUB and split into original files
 extract_merged_epub() {
+	# Extract merged ePUB and split into original files
 	debug_func "$@"
 	if ! validate_epub "$1" 1; then
 		error "Program exits in extract_merged_epub"
 	fi
 
 	# `mktemp` should be done before extracting args
-	TEMP_DIR="$(mktemp -d)"
+	temp_dir="$(mktemp -d)"
 
-	unzip -q "$1" -d "$TEMP_DIR"
+	unzip -q "$1" -d "$temp_dir"
 
 	# `cd` should be done after extracting args
-	cd "$TEMP_DIR" > /dev/null
+	cd "$temp_dir" > /dev/null
 
 	# Update font paths in all CSS files to point to centralized fonts 
 	update_css_fonts_for_split
@@ -1143,16 +1142,16 @@ extract_merged_epub() {
 	create_individual_epubs
 }
 
-# Verify all ePUB files have same version
 check_epub_versions() {
+	# Verify all ePUB files have same version
 	debug_func "$@"
 	local first_version
 	first_version="$(get_version "$1")"
 
 	if [[ -z "$first_version" || \
-			( "$first_version" != "2.0" && \
-                  "$first_version" != "3.0" ) ]]; then
-		error "Failed to get ePUB version ($1)"
+		( "$first_version" != "2.0" && \
+		"$first_version" != "3.0" ) ]]; then
+	error "Failed to get ePUB version ($1)"
 	fi
 
 	if [[ -z "$first_version" \
@@ -1180,6 +1179,10 @@ check_epub_versions() {
 	echo "$first_version"
 }
 
+trap 'printf "\033[31mError (epub-merge): at line $LINENO\033[0m\n" >&2; \
+	cleanup' ERR INT TERM
+trap cleanup EXIT
+
 main() {
 	parse_args "$@"
 	shift $((OPTIND-1))
@@ -1191,14 +1194,14 @@ main() {
 	validate_args "$@"
 
 	# Check ePUBs versions
-	EPUB_VERSION="$(check_epub_versions "$@")"
-	readonly EPUB_VERSION
+	epub_version="$(check_epub_versions "$@")"
+	readonly epub_version
 
-	debug_var EPUB_VERSION
-	TEMP_EPUB="$(mktemp "${OUTPUT_DIR}/.epub-merge.XXXXX")"
-	readonly TEMP_EPUB
+	debug_var epub_version
+	temp_epub="$(mktemp "${output_dir}/.epub-merge.XXXXX")"
+	readonly temp_epub
 
-	if [[ -n "$EXTRACT_MODE" ]]; then
+	if [[ -n "$extract_mode" ]]; then
 		extract_merged_epub "$1" && exit 0 || exit 1
 	fi
 
@@ -1210,27 +1213,27 @@ main() {
 		validate_epub "$epub" 0
 	done
 
-	# Sort input files and save them to EPUB_FILES
+	# Sort input files and save them to epub_files
 	sort_files "$@"
 
 	# Create temporary directory
-	TEMP_DIR="$(mktemp -d)"
+	temp_dir="$(mktemp -d)"
 
 	# Extract all ePUBs to 0/, 1/, 2/, ... in temp_dir
 	extract_files
 
 	# Now, we move to working directory
-	cd "$TEMP_DIR" > /dev/null
+	cd "$temp_dir" > /dev/null
 
-	# Get paths lists OPF/NCX/NAV_FILES
+	# Get paths lists OPF/NCX/nav_files
 	collect_file_paths_and_format_xml
 
 	# Setup base structure (mimetype, META-INF/*, ...)
 	setup_base
 
 	# Detect language
-	EPUB_LANG="$(detect_language "${OPF_FILES[0]}" "$EPUB_LANG")"
-	readonly EPUB_LANG
+	epub_lang="$(detect_language "${opf_files[0]}" "$epub_lang")"
+	readonly epub_lang
 	detect_volume_labels
 
 	local uuid
@@ -1250,10 +1253,9 @@ main() {
 	# Update CSS font references
 	update_css_fonts_for_merge
 
-	create_final_epub "$OUTPUT_DIR/$EPUB_NAME.epub" "."
+	create_final_epub "$output_dir/$epub_name.epub" "."
 }
 
-# Run main function with all arguments
 if [ -z "${EPUB_MERGE_TEST:-}" ]; then
 	main "$@"
 fi

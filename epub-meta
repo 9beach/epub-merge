@@ -1,25 +1,26 @@
 #!/bin/bash
 
-DEBUG=${DEBUG:-}	 # Debug output toggle.
-QUIET="${QUIET:-}"	 # Suppress non-critical logs.
+set -euo pipefail
 
-edit_mode=false		 # If false, show metadata; if true, modify.
-epub_file=""             # Input EPUB file path.
-opf_file=""              # Input OPF file path (if given).
-epub_opf=""              # Path to OPF inside EPUB.
-temp_dir=""              # Temporary working directory.
-indent=""                # Indentation detected before </metadata>.
-opf_filter=""            # Regex to remove old tags before insertion.
-output_filter=""         # Regex for highlighting changed fields in output.
-readonly real_lf=$'\037' # Internal field separator for XML line handling.
+readonly DEBUG=${DEBUG:-}  # Debug output toggle.
+
+quiet_mode=""              # Suppress non-critical logs.
+edit_mode=false            # If false, show metadata; if true, modify.
+epub_file=""               # Input EPUB file path.
+opf_file=""                # Input OPF file path (if given).
+epub_opf=""                # Path to OPF inside EPUB.
+temp_dir=""                # Temporary working directory.
+indent=""                  # Indentation detected before </metadata>.
+opf_filter=""              # Regex to remove old tags before insertion.
+output_filter=""           # Regex for highlighting changed fields in output.
+readonly real_lf=$'\037'   # Internal field separator for XML line handling.
 
 readonly removing="<removed>"       # Marker for deleting a field.
 readonly opf_header="header"        # Original OPF header path
 readonly new_opf_header="newhdr"    # Modified OPF header path
 readonly opf_footer="footer"        # OPF footer path
 
-
-# --- Values from args
+# --- From args
 
 new_title=""
 new_author=""
@@ -108,8 +109,8 @@ cleanup() {
 }
 
 log() {
-	# Print gray log messages unless QUIET is set.
-	if [[ -z "$QUIET" ]]; then
+	# Print gray log messages unless quiet_mode is set.
+	if [[ -z "$quiet_mode" ]]; then
 		printf '\033[90m%s\033[0m\n' "$*" >&2
 	fi
 }
@@ -360,8 +361,6 @@ build_modifying_filters() {
 
 # --- Start main routine
 
-set -euo pipefail
-
 trap 'printf "\033[31mError ($(basename "$0")): at line $LINENO\033[0m\n" >&2; \
 	cleanup' ERR INT TERM
 trap cleanup EXIT
@@ -380,7 +379,7 @@ while getopts "t:a:r:p:s:l:d:i:x:u:m:qh" opt; do
 		x) new_rights="${OPTARG:-$removing}"; edit_mode=true ;;
 		u) new_published="${OPTARG:-$removing}"; edit_mode=true ;;
 		m) new_modified="${OPTARG:-$removing}"; edit_mode=true ;;
-		q) QUIET=1 ;;
+		q) quiet_mode=1 ;;
 		h) show_usage ;;
 		\?) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
 		:) echo "Option -$OPTARG requires an argument." >&2; exit 1 ;;
@@ -473,7 +472,7 @@ else
 	format_opf > "$opf_file"
 fi
 
-if [[ "$QUIET" -ne 1 ]]; then
+if [[ "$quiet_mode" -ne 1 ]]; then
 	show_tags "$new_opf_header" \
 		| sed -E "s/$output_filter/\x1b[32m&\x1b[0m/g" \
 		| split_lines >&2
