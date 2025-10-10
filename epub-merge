@@ -65,7 +65,7 @@ Options:
   -q             Quiet mode, suppress progress messages.
   -s suffix      Add suffix to table of contents volume labels.
   -t title       Set custom title and output filename.
-  -v labels      Set custom volume labels (e.g., "Love;Peace;Hate").
+  -v labels      Set custom volume labels (e.g., "Love//Peace//Hate").
   -x             Extract merged ePUB into original files.
   -h             Show this help message.
 
