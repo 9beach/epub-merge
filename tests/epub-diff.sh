@@ -9,7 +9,7 @@ set -euo pipefail
 trap 'echo "epub-diff error: at line $LINENO" >&2; cleanup' ERR INT TERM
 
 cleanup() {
-	[ -n "${TEMP_DIR:-}" ] && rm -rf "$TEMP_DIR"
+	[ -n "${temp_dir:-}" ] && rm -rf "$temp_dir"
 }
 
 trap cleanup EXIT
@@ -24,43 +24,6 @@ else
 	}
 fi
 
-XML_FORMATTER=""
-
-if command -v xmllint &> /dev/null; then
-	XML_FORMATTER="xmllint"
-elif command -v python3 &> /dev/null; then
-	XML_FORMATTER="python3"
-else
-	XML_FORMATTER="cat"
-	log "The XML formatter is not installed, which may cause errors during the merge process. Please install xmllint."
-fi
-
-# Format XML/HTML file
-if [[ "$XML_FORMATTER" == "xmllint" ]]; then
-	format_xml() {
-		local file="$1"
-		local temp_xml="$TEMP_DIR/.xml.XXXXX"
-		xmllint --recover --format --noblanks "$file" \
-			> "${temp_xml}" 2>/dev/null \
-			&& mv "${temp_xml}" "$file"
-		}
-elif [[ "$XML_FORMATTER" == "python3" ]]; then
-	format_xml() {
-		debug_func "$@"
-		local file="$1"
-		local temp_xml="$TEMP_DIR/.xml.XXXXX"
-		python3 -c "import xml.dom.minidom as x,sys; print(x.parseString(open(sys.argv[1]).read()).toprettyxml(indent='    '))" "$file" 2>/dev/null \
-			| grep -v "^ *$" \
-			> "${temp_xml}" \
-			&& mv "${temp_xml}" "$file"
-		}
-else
-	format_xml() {
-		debug_func "$@"
-		log "XML formatter not available"
-	}
-fi
-
 readonly UUID='[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}'
 
 filter_uuid() {
@@ -71,20 +34,16 @@ filter_uuid() {
 	fi
 }
 
-TEMP_DIR=$(mktemp -d)
-readonly TEMP_DIR
+temp_dir=$(mktemp -d)
+readonly temp_dir
 
-mkdir "$TEMP_DIR/1st"
-mkdir "$TEMP_DIR/2nd"
+mkdir "$temp_dir/1st"
+mkdir "$temp_dir/2nd"
 
-unzip -q "$1" -d "$TEMP_DIR/1st"
-unzip -q "$2" -d "$TEMP_DIR/2nd"
+unzip -q "$1" -d "$temp_dir/1st"
+unzip -q "$2" -d "$temp_dir/2nd"
 
-cd "$TEMP_DIR"
-
-find . -type f \( -iname "*.opf" -o -iname "*.ncx"  -o -iname "nav.xhtml" \) -print0 | while IFS= read -r -d '' file; do
-	format_xml "$file"
-done
+cd "$temp_dir"
 
 if [[ -z "${EPUB_DIFF_COMPARE_UUID:-}" ]]; then
 	filter_uuid "1st/content.opf"
