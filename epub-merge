@@ -8,25 +8,14 @@ epub_version=""
 opf_files=()
 ncx_files=()
 nav_files=()
-
 readonly merged_ncx_id="ncx"
 readonly merged_ncx="toc.ncx"
 first_ncx_id=""
 first_ncx=""
-
 readonly merged_nav_id="nav"
 readonly merged_nav="nav.xhtml"
 first_nav_id=""
 first_nav=""
-
-temp_dir=""
-temp_file=""
-temp_epub=""
-xml_formatter=""
-
-iconv_has_utf_8_mac="$(iconv -l | grep "UTF-8-MAC" || true)"
-readonly iconv_has_utf_8_mac
-readonly sp="[[:space:]]"
 
 # --- From args
 
@@ -43,6 +32,18 @@ epub_lang=""
 do_not_sort_params=""
 extract_mode=""
 quiet_mode=""
+
+temp_dir=""
+temp_file=""
+temp_epub=""
+xml_formatter=""
+iconv_has_utf_8_mac="$(iconv -l | grep "UTF-8-MAC" || true)"
+readonly iconv_has_utf_8_mac
+
+readonly sp="[[:space:]]"
+readonly sed_remove_dot_path='s#(["/])\./#\1#g'
+readonly sed_remove_dotdot_path="s#/[^/][^/]*/\.\./#/#g"
+readonly uuid_pattern='[0-9a-fA-F]\{8\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{12\}'
 
 # --- Utility functions
 
@@ -664,10 +665,6 @@ setup_base() {
 	fi
 }
 
-readonly sed_remove_dot_path='s#(["/])\./#\1#g'
-readonly sed_remove_dotdot_path="s#/[^/][^/]*/\.\./#/#g"
-readonly uuid_pattern='[0-9a-fA-F]\{8\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{12\}'
-
 merge_ncxs() {
 	[[ -z "$first_ncx" ]] && return 0
 
@@ -755,8 +752,7 @@ merge_navs() {
 		cur_nav_dir="$(dirname "$cur_nav")"
 		volume_num=$((i + 1))
 
-		ref="$cur_nav_dir/$(get_xml_attr \
-			"a[[:space:]]*href" "href" "$cur_nav")"
+		ref="$cur_nav_dir/$(get_xml_attr "a$sp*href" "href" "$cur_nav")"
 		if [[ -n "${toc_volume_labels[i]:-}" ]]; then
 			local label="${toc_volume_labels[i]}"
 		else
@@ -822,7 +818,7 @@ merge_opfs() {
 		fi
 
 		# Remove all nav properties
-		sed "s:[[:space:]]*properties[[:space:]]*=[[:space:]]*[\"']nav[^\"']*[\"']::" "$manifest_file"
+		sed "s:$sp*properties$sp*=$sp*[\"']nav[^\"']*[\"']::" "$manifest_file"
 
 		echo "  </manifest>"
 
@@ -964,7 +960,7 @@ fix_fontpaths_to_root() {
 	local rpath
 	rpath="$(path_to_root "$1")"
 
-	sed_i -E "s#url[[:space:]]*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url(${rpath}/fonts/\\1)#i" "$1"
+	sed_i -E "s#url$sp*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url(${rpath}/fonts/\\1)#i" "$1"
 }
 
 path_to_trunk() {
@@ -984,7 +980,7 @@ fix_fontpaths_to_trunk() {
 	# Trunk dirs(0, 1, 2, ...) are now root
 	local rpath
 	rpath="$(path_to_trunk "$1")"
-	sed_i -E "s#url[[:space:]]*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url(${rpath}fonts/\\1)#i" "$1"
+	sed_i -E "s#url$sp*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url(${rpath}fonts/\\1)#i" "$1"
 }
 
 update_css_fonts_for_split() {
