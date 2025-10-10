@@ -155,14 +155,14 @@ if [[ "$xml_formatter" == "xmllint" ]]; then
 		local file="$1"
 		local temp_xml="$temp_dir/.xml.XXXXX"
 		xmllint --recover --format --noblanks "$file" \
-			> "${temp_xml}" 2>/dev/null \
+			> "${temp_xml}" 2> /dev/null \
 			&& mv "${temp_xml}" "$file"
 	}
 elif [[ "$xml_formatter" == "python3" ]]; then
 	format_xml() {
 		local file="$1"
 		local temp_xml="$temp_dir/.xml.XXXXX"
-		python3 -c "import xml.dom.minidom as x,sys; print(x.parseString(open(sys.argv[1]).read()).toprettyxml(indent='    '))" "$file" 2>/dev/null \
+		python3 -c "import xml.dom.minidom as x,sys; print(x.parseString(open(sys.argv[1]).read()).toprettyxml(indent='    '))" "$file" 2> /dev/null \
 			| grep -v "^ *$" \
 			> "${temp_xml}" \
 			&& mv "${temp_xml}" "$file"
@@ -305,7 +305,7 @@ check_deps() {
 	local missing_deps=()
 
 	for cmd in unzip zip uuidgen; do
-		if ! command -v "$cmd" >/dev/null 2>&1; then
+		if ! command -v "$cmd" > /dev/null 2>&1; then
 			missing_deps+=("$cmd")
 		fi
 	done
@@ -336,10 +336,10 @@ get_prefix() {
 	echo "$common" | sed -e 's/[-_[( ]*$//' -e 's/ [0-9][0-9]*$//'
 }
 
-to_nfc(){
+to_nfc() {
 	# Convert to NFC encoding
 	if [ -n "$iconv_has_utf_8_mac" ]; then
-		iconv -f UTF-8-MAC -t UTF-8 "$1" > "$1.nfc" 2>/dev/null \
+		iconv -f UTF-8-MAC -t UTF-8 "$1" > "$1.nfc" 2> /dev/null \
 			&& mv "$1.nfc" "$1"
 	fi
 }
@@ -521,7 +521,7 @@ detect_language() {
 
 	# Extract language from metadata first
 	lang_from_opf=$(grep -ho -E -m1 '<dc:language>.*</dc:language>' \
-			"$opf_file" 2>/dev/null \
+			"$opf_file" 2> /dev/null \
 		| sed 's/<[^>]*>//g')
 
 	if [[ -n "$lang_from_opf" ]]; then
@@ -533,7 +533,7 @@ detect_language() {
 
 	# Detect language by character patterns in a single grep call
 	char=$(grep -o -E -m1 '[가-힣]|[ぁ-ゟァ-ヿ]|[一-龯]|[А-Яа-яЁё]' \
-		"$opf_file" 2>/dev/null)
+		"$opf_file" 2> /dev/null)
 	case "$char" in
 		[가-힣]*) echo "ko" ;;
 		[ぁ-ゟァ-ヿ]*) echo "ja" ;;
@@ -933,14 +933,15 @@ consolidate_merged() {
 	mkdir fonts
 
 	find [0-9]* -type f \( \
-		-iname "*.ttf" -o -iname "*.otf" -o -iname "*.woff*" -o -iname "*.eot"  \) \
-		-exec mv {} fonts/ \; 2>/dev/null || true
-	rmdir fonts 2>/dev/null || true
+		-iname "*.ttf" -o -iname "*.otf" \
+		-o -iname "*.woff*" -o -iname "*.eot" \) \
+		-exec mv {} fonts/ \; 2> /dev/null || true
+	rmdir fonts 2> /dev/null || true
 
 	# Remove unused
 	find [0-9]* \( -iname "META-INF" -o -iname "mimetype" \
 		-o -iname "*.opf" -o -iname "*.ncx" \) \
-		-exec rm -rf {} + 2>/dev/null || true
+		-exec rm -rf {} + 2> /dev/null || true
 
 	find [0-9]* -type d -empty -delete || true
 }
@@ -1043,10 +1044,11 @@ create_individual_epubs() {
 	local status=0 count i
 	local toc_file="toc.ncx" nav_file="nav.xhtml"
 
-	find fonts -type f | sort -V | sed 's#^..##' > .all-fonts-list 2>/dev/null || true
+	find fonts -type f | sort -V | sed 's#^..##' \
+		> .all-fonts-list 2> /dev/null || true
 
 	# shellcheck disable=SC2012
-	count="$(ls .epub-merge/[0-9]*.opf 2>/dev/null | wc -l)"
+	count="$(ls .epub-merge/[0-9]*.opf 2> /dev/null | wc -l)"
 
 	for i in $(seq 0 $((count - 1))); do
 		local cur_epub
@@ -1069,7 +1071,7 @@ create_individual_epubs() {
 
 		local different_fonts=""
 
-		if ! diff .fonts-list .all-fonts-list >/dev/null 2>&1; then
+		if ! diff .fonts-list .all-fonts-list > /dev/null 2>&1; then
 			different_fonts=1
 		fi
 
@@ -1079,7 +1081,7 @@ create_individual_epubs() {
 			if ! create_final_epub "$output_dir/$cur_epub" "$i/"; then
 				status=1
 			fi
-			rmdir fonts 2>/dev/null || true
+			rmdir fonts 2> /dev/null || true
 		else
 			if ! create_final_epub "$output_dir/$cur_epub" "$i/" "."; then
 				status=1
