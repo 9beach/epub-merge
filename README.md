@@ -57,7 +57,7 @@ sudo chmod a+rx /usr/local/bin/epub-merge /usr/local/bin/epub-meta
 - Applies language-specific volume labels based on the `-l` option (e.g., `-l ko` for Korean produces `제 1권`, `제 2권`).
 - Removes duplicate fonts across input EPUBs to optimize file size.
 - Supports natural sorting of input files (e.g., `love-8.epub`, `love-9.epub`, `love-10.epub` are sorted correctly) unless disabled with `-O`.
-- Allows customization of volume labels with `-p` (prefix), `-s` (suffix), or `-v` (custom labels, e.g., `-v "Part 1;Part 2;Part 3"`).
+- Allows customization of volume labels with `-p` (prefix), `-s` (suffix), or `-v` (custom labels, e.g., `-v "Part 1//Part 2//Part 3"`).
 - Outputs the merged EPUB to the current directory or a specified directory with `-d`.
 
 **Extracting EPUB Files**:
@@ -116,7 +116,7 @@ sudo chmod a+rx /usr/local/bin/epub-merge /usr/local/bin/epub-meta
 - **Custom volume labels**: Define specific volume labels:
 
   ```
-  epub-merge -v "Love;Peace;Hate" story-1.epub story-2.epub story-3.epub
+  epub-merge -v "Love//Peace//Hate" story-1.epub story-2.epub story-3.epub
   ```
 
   Output: `story.epub` with TOC:
