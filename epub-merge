@@ -43,7 +43,8 @@ readonly iconv_has_utf_8_mac
 readonly sp="[[:space:]]"
 readonly sed_remove_dot_path='s#(["/])\./#\1#g'
 readonly sed_remove_dotdot_path="s#/[^/][^/]*/\.\./#/#g"
-readonly uuid_pattern='[0-9a-fA-F]\{8\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{12\}'
+readonly uuid_pattern='[0-9a-fA-F]\{8\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}'\
+'-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{12\}'
 
 # --- Utility functions
 
@@ -142,14 +143,20 @@ error() {
 
 # --- XML utility functions
 
+readonly xml_formatter_warning='The XML formatter is not installed, which \
+may cause errors during the merge process. Please install xmllint.'
+
 if command -v xmllint &> /dev/null; then
 	xml_formatter="xmllint"
 elif command -v python3 &> /dev/null; then
 	xml_formatter="python3"
 else
 	xml_formatter="cat"
-	log "The XML formatter is not installed, which may cause errors during the merge process. Please install xmllint."
+	log "$xml_formatter_warning"
 fi
+
+readonly python3_xml_formatter="import xml.dom.minidom as x,sys; \
+print(x.parseString(open(sys.argv[1]).read()).toprettyxml(indent='    '))"
 
 if [[ "$xml_formatter" == "xmllint" ]]; then
 	format_xml() {
@@ -163,7 +170,7 @@ elif [[ "$xml_formatter" == "python3" ]]; then
 	format_xml() {
 		local file="$1"
 		local temp_xml="$temp_dir/.xml.XXXXX"
-		python3 -c "import xml.dom.minidom as x,sys; print(x.parseString(open(sys.argv[1]).read()).toprettyxml(indent='    '))" "$file" 2> /dev/null \
+		python3 -c "$python3_xml_formatter" "$file" 2> /dev/null \
 			| grep -v "^ *$" \
 			> "${temp_xml}" \
 			&& mv "${temp_xml}" "$file"
@@ -248,7 +255,7 @@ xml_grep_before_tag() {
 }
 
 modify_opf_metadata() {
-	# Modify OPF metadata: replace title and append suffix('-0') to cover ID
+	# Replace title and append suffix('-0') to cover ID
 	debug_func "$@"
 	local epub_title="$1"
 	sed -E "
@@ -258,31 +265,34 @@ modify_opf_metadata() {
 	| grep -viE 'calibre:(series|title_sort)'
 }
 
-filter_dups() {
-	# Remove duplicate manifest font items from stdin (keep first 
-	# occurrence only)
-	awk '
-	/<manifest/ { in_manifest = 1 }
-	/<\/manifest/ { in_manifest = 0; print; next }
+awk_filter_dups=$(cat <<'EOF'
+/<manifest/ { in_manifest = 1 }
+/<\/manifest/ { in_manifest = 0; print; next }
 
-	in_manifest && /<item[^>]*href=/ {
-		if (match($0, /href=["'\'']([^"'\'']*)["'\'']/)) {
-			href = substr($0, RSTART + 6, RLENGTH - 7)
+in_manifest && /<item[^>]*href=/ {
+	if (match($0, /href=["']([^"']*)["']/)) {
+		href = substr($0, RSTART + 6, RLENGTH - 7)
+		if (href != "") {
+			href_lower = tolower(href)
 
-			if (href != "") {
-				href_lower = tolower(href)
-
-				if (href_lower ~ /\.(ttf|otf|woff|woff2|eot)(\?|$)/) {
-					if (seen[href_lower]) {
-						next
-					}
-					seen[href_lower] = 1
+			if (href_lower ~ /\.(ttf|otf|woff|woff2|eot)(\?|$)/) {
+				if (seen[href_lower]) {
+					next
 				}
+				seen[href_lower] = 1
 			}
 		}
 	}
+}
+{ print }
+EOF
+)
+readonly awk_filter_dups
 
-	{ print }'
+filter_dups() {
+	# Remove duplicate manifest font items from stdin (keep first 
+	# occurrence only)
+	awk "$awk_filter_dups"
 }
 
 # --- ePUB utility functions
@@ -403,14 +413,16 @@ gen_opf_header() {
 		| modify_opf_metadata "$epub_title"
 }
 
+sed_fix_font_paths=$(cat <<'EOF'
+s#href=["'].*/[^"']*/([^/]+\.(ttf|otf|woff|woff2|eot))["']#href="fonts/\1"#gi
+EOF
+)
+readonly sed_fix_font_paths
+
 fix_font_paths() {
 	# Fix font paths for merged ePUB
 	# ='path/to/myfont.TTF' -> ='fonts/myfont.TTF'
-	sed -E 's#href=["'"'"'].*/[^"'"'"']*/([^/]+\.(ttf|otf|woff|woff2|eot))["'"'"']#href="fonts/\1"#gi'
-}
-
-safe_filename() {
-	echo "$1" | tr '/:*?<>|"\\' '_'
+	sed -E "$sed_fix_font_paths"
 }
 
 # --- Command line parsing and validation
@@ -478,7 +490,7 @@ gen_output_names() {
 	fi
 
 	epub_title="${epub_title:-$epub_name}"
-	epub_name="$(safe_filename "$epub_name")"
+	epub_name="${epub_name//[\/:*?<>|\"\\]/_}"  # safe filename
 	epub_title="$(escape_xml_for_sed "$epub_title")"
 
 	if [[ $overwrite_existing != 1 && -f "$epub_name.epub" ]]; then
@@ -509,7 +521,7 @@ extract_files() {
 	done
 }
 
-detect_language() {
+detect_lang() {
 	# Detect language from OPF content
 	local opf_file="$1" lang="$2" lang_from_opf char
 
@@ -531,7 +543,7 @@ detect_language() {
 	debug "auto-detect language"
 
 	# Detect language by character patterns in a single grep call
-	char=$(grep -o -E -m1 '[가-힣]|[ぁ-ゟァ-ヿ]|[一-龯]|[А-Яа-яЁё]' \
+	char=$(grep -Eom1 '[가-힣]|[ぁ-ゟァ-ヿ]|[一-龯]|[А-Яа-яЁё]' \
 		"$opf_file" 2> /dev/null)
 	case "$char" in
 		[가-힣]*) echo "ko" ;;
@@ -635,32 +647,42 @@ get_valume_labels() {
 	toc_volume_suffix="$suffix"
 }
 
+readonly xml_package_type="application/oebps-package+xml"
+readonly xml_xmlns="urn:oasis:names:tc:opendocument:xmlns:container"
+container_xml=$(cat <<EOF
+<?xml version="1.0"?>
+<container version="1.0" xmlns="$xml_xmlns">
+   <rootfiles>
+      <rootfile full-path="content.opf" media-type="$xml_package_type"/>
+   </rootfiles>
+</container>
+EOF
+)
+readonly container_xml
+
+ibooks_xml=$(cat <<'EOF'
+<?xml version="1.0" encoding="UTF-8" ?>
+<display_options>
+  <platform name="*">
+    <option name="specified-fonts">true</option>
+  </platform>
+</display_options>
+EOF
+)
+readonly ibooks_xml
+
 setup_base() {
 	# Setup base ePUB structure from first file
 	cp -r "0/META-INF" "0/mimetype" "."
 
 	# Update container.xml to point to our new OPF
-	cat > META-INF/container.xml <<- EOF
-		<?xml version="1.0"?>
-		<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-		   <rootfiles>
-		      <rootfile full-path="content.opf" media-type="application/oebps-package+xml"/>
-		   </rootfiles>
-		</container>
-		EOF
+	echo "$container_xml" > META-INF/container.xml
 
 	# Add iBooks display options if not present
 	local ibooks="META-INF/com.apple.ibooks.display-options.xml"
 	if [[ ! -f "$ibooks" ]]; then
 		log "Adding iBooks display options"
-		cat > "$ibooks" <<- EOF
-			<?xml version="1.0" encoding="UTF-8" ?>
-			<display_options>
-			  <platform name="*">
-			    <option name="specified-fonts">true</option>
-			  </platform>
-			</display_options>
-			EOF
+		echo "$ibooks_xml" > "$ibooks"
 	fi
 }
 
@@ -759,7 +781,12 @@ merge_navs() {
 		fi
 
 		# Add volume entry and link
-		echo "<li style='list-style: none !important; margin: 0 !important; padding: 0 !important;' id=\"vol-$i=\"><a href=\"$ref\">$(escape_xml "$label")</a></li>"
+
+		vol_link="<li style='list-style: none !important; margin: 0 !"
+		vol_link+="important; padding: 0 !important;' id=\"vol-$i=\">"
+		vol_link+="<a href=\"$ref\">$(escape_xml "$label")</a></li>"
+
+		echo "$vol_link"
 
 		# Merge navigation points
 		extract_and_modify_xml nav "epub.type=.toc." \
@@ -813,11 +840,15 @@ merge_opfs() {
 		echo "  <manifest>"
 		if [[ -n "$first_nav" ]]; then
 			# Add only one nav property
-			echo "<item id=\"$merged_nav_id\" href=\"$merged_nav\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>"
+			nav_item="<item id=\"$merged_nav_id\" href=\""
+			nav_item+="$merged_nav\" media-type=\"application/xhtml"
+			nav_item+="+xml\" properties=\"nav\"/>"
+			echo "$nav_item"
 		fi
 
 		# Remove all nav properties
-		sed "s:$sp*properties$sp*=$sp*[\"']nav[^\"']*[\"']::" "$manifest_file"
+		sed "s:$sp*properties$sp*=$sp*[\"']nav[^\"']*[\"']::" \
+			"$manifest_file"
 
 		echo "  </manifest>"
 
@@ -855,6 +886,7 @@ backup_originals() {
 
 	local no_ncx="___no_ncx___"
 	local no_nav="___no_nav___"
+	local nav="$merged_nav"
 
 	adjust_path() {
 		local path="$1" idx="$2"
@@ -885,7 +917,7 @@ backup_originals() {
 		s:(<(item|reference).*href=.*)(//):\1/:
 		$sed_remove_dot_path
 		s:href=\"[^\"]*\.ncx\":href=\"toc.ncx\":
-		s:href=\"[^\"]*$(basename "$cur_nav")\":href=\"$merged_nav\":
+		s:href=\"[^\"]*$(basename "$cur_nav")\":href=\"$nav\":
 		s:[\"']${cur_ncx_id}[\"']:\"ncx\":" "$cur_opf" \
 		| fix_font_paths \
 		> ".epub-merge/$i.opf"
@@ -896,7 +928,7 @@ backup_originals() {
 			sed -E "
 			s:src=\":&$new_ncx_dir/:g
 			s:(src=.*)(//):\1/:
-			s:src=\"[^\"]*$(basename "$cur_nav")\":href=\"$merged_nav\":
+			s:src=\"[^\"]*$(basename "$cur_nav")\":href=\"$nav\":
 			$sed_remove_dot_path" "$cur_ncx" \
 			> ".epub-merge/$i.ncx"
 		fi
@@ -907,7 +939,7 @@ backup_originals() {
 			sed -E "
 			s:(href=\")([^#]):\1$new_nav_dir/\2:g
 			s:(href=.*)(//):\1/:
-			s:href=\"[^\"]*$(basename "$cur_nav")\":href=\"$merged_nav\":
+			s:href=\"[^\"]*$(basename "$cur_nav")\":href=\"$nav\":
 			$sed_remove_dot_path
 			$sed_remove_dotdot_path" "$cur_nav" \
 			> ".epub-merge/$i.nav"
@@ -956,10 +988,9 @@ path_to_root() {
 fix_fontpaths_to_root() {
 	# Update CSS font URLs for merged ePUB
 	# Merged, so one depth more
-	local rpath
-	rpath="$(path_to_root "$1")"
-
-	sed_i -E "s#url$sp*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url(${rpath}/fonts/\\1)#i" "$1"
+	sed_expr="s#url$sp*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url"
+	sed_expr+="($(path_to_root "$1")/fonts/\\1)#i"
+	sed_i -E "$sed_expr" "$1"
 }
 
 path_to_trunk() {
@@ -977,9 +1008,9 @@ path_to_trunk() {
 fix_fontpaths_to_trunk() {
 	# Update CSS font URLs for split ePUBs
 	# Trunk dirs(0, 1, 2, ...) are now root
-	local rpath
-	rpath="$(path_to_trunk "$1")"
-	sed_i -E "s#url$sp*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#url(${rpath}fonts/\\1)#i" "$1"
+	sed_expr="s#url$sp*\([^)]*/([^/]+\.(ttf|otf|woff|woff2|eot))[^)]*\)#" 
+	sed_expr+="url($(path_to_trunk "$1")fonts/\\1)#i"
+	sed_i -E "$sed_expr" "$1"
 }
 
 update_css_fonts_for_split() {
@@ -1057,8 +1088,10 @@ create_individual_epubs() {
 
 		cp -r META-INF mimetype "$i"/
 		cp .epub-merge/"$i".opf "$i"/content.opf
-		[[ -f .epub-merge/"$i".ncx ]] && cp .epub-merge/"$i".ncx "$i/$toc_file"
-		[[ -f .epub-merge/"$i".nav ]] && cp .epub-merge/"$i".nav "$i/$nav_file"
+		[[ -f .epub-merge/"$i".ncx ]] \
+			&& cp .epub-merge/"$i".ncx "$i/$toc_file"
+		[[ -f .epub-merge/"$i".nav ]] \
+			&& cp .epub-merge/"$i".nav "$i/$nav_file"
 
 		sed -n 's/.*href="\(fonts\/[^"]*\)".*/\1/p' "$i"/content.opf \
 			| sort -V > .fonts-list || true
@@ -1069,15 +1102,17 @@ create_individual_epubs() {
 			different_fonts=1
 		fi
 
+		local output="$output_dir/$cur_epub"
+
 		if [[ $different_fonts == 1 ]]; then
 			mkdir "$i/fonts"
 			sed "s#.*#cp \"&\" $i/fonts/#" .fonts-list | bash - 
-			if ! create_final_epub "$output_dir/$cur_epub" "$i/"; then
+			if ! create_final_epub "$output" "$i/"; then
 				status=1
 			fi
 			rmdir fonts 2> /dev/null || true
 		else
-			if ! create_final_epub "$output_dir/$cur_epub" "$i/" "."; then
+			if ! create_final_epub "$output" "$i/" "."; then
 				status=1
 			fi
 		fi
@@ -1199,7 +1234,7 @@ main() {
 	setup_base
 
 	# Detect language
-	epub_lang="$(detect_language "${opf_files[0]}" "$epub_lang")"
+	epub_lang="$(detect_lang "${opf_files[0]}" "$epub_lang")"
 	readonly epub_lang
 	get_valume_labels
 

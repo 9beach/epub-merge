@@ -1,12 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?><package xmlns="http://www.idpf.org/2007/opf" unique-identifier="bookid" version="2.0">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
     <dc:date>2017-12-07</dc:date>
-    <dc:identifier id="bookid">urn:uuid:68D67A93-9C8E-A648-B593-96D71D9E0CEA</dc:identifier>
     <dc:language>ko</dc:language>
-    <meta content="0.9.7" name="Sigil version"/>
     <meta content="cover.jpg" name="cover"/>
-    <meta content="1" name="GBSProcVer"/>
-    <meta content="GoogleEbooks" name="GBSEpubSource"/>
+    <meta content="TestEbooks" name="TestEpubSource"/>
     <dc:title>뱀과물 (Snake And Water)</dc:title>
     <dc:creator opf:role="aut" opf:file-as="배, 수아">배수아</dc:creator>
     <dc:creator opf:role="aut" opf:file-as="Bae, Suah">Suah Bae</dc:creator>
@@ -21,7 +18,6 @@
     <item href="_page_map_.xml" id="_page_map_" media-type="application/oebps-page-map+xml"/>
   </manifest>
   <spine page-map="_page_map_" toc="ncx">
-    <itemref idref="cover.xhtml"/>
     <itemref idref="copyright.xhtml"/>
   </spine>
   <guide/>

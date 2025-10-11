@@ -3,19 +3,15 @@
     <dc:title>뱀과 물</dc:title>
     <dc:creator opf:role="aut">배수아</dc:creator>
     <dc:date>2017-12-07</dc:date>
-    <dc:identifier id="bookid">urn:uuid:68D67A93-9C8E-A648-B593-96D71D9E0CEA</dc:identifier>
     <dc:language>ko</dc:language>
-    <meta content="0.9.7" name="Sigil version"/>
     <meta content="cover.jpg" name="cover"/>
-    <meta content="1" name="GBSProcVer"/>
-    <meta content="GoogleEbooks" name="GBSEpubSource"/>
+    <meta content="TestEbooks" name="TestEpubSource"/>
   </metadata>
   <manifest>
     <item href="toc.ncx" id="ncx" media-type="application/x-dtbncx+xml"/>
     <item href="_page_map_.xml" id="_page_map_" media-type="application/oebps-page-map+xml"/>
   </manifest>
   <spine page-map="_page_map_" toc="ncx">
-    <itemref idref="cover.xhtml"/>
     <itemref idref="copyright.xhtml"/>
   </spine>
   <guide/>

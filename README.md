@@ -35,40 +35,187 @@ sudo chmod a+rx /usr/local/bin/epub-merge /usr/local/bin/epub-meta
 
 ## How it works
 
+## How it works
+
 ### epub-merge
 
-**Merging**:
+**Merging EPUB Files**:
 
-- Creates a volume-based table of contents (TOC) structure:
+- Combines multiple EPUB files into a single EPUB with a unified table of contents (TOC) organized by volume.
+- Automatically generates a book title based on common parts of input filenames (e.g., `love-1.epub`, `love-2.epub` → `love.epub`) unless overridden with `-t`.
+- Creates a volume-based TOC structure, grouping chapters from each input EPUB under volume labels:
 
-```text
+  ```
   Volume 1
     Chapter 1: The Beginning
     Chapter 2: A New Journey
-    ...
   Volume 2
     Chapter 4: Challenges Ahead
     Chapter 5: The Turning Point
-    ...
-```
+  ```
 
-- Generates book title and filename from common parts of input files (customizable with `-t`).
-- Applies language-specific volume labels:
-  - Korean: `제 1권`, `제 2권`
-  - Chinese: `第1卷`, `第2卷`
-  - Japanese: `第1巻`, `第2巻`
-  - Spanish: `Volumen 1`, `Volumen 2`
-  - French: `Volume 1`, `Volume 2`
-  - German: `1. Band`, `2. Band`
-  - Russian: `Том 1`, `Том 2`
-  - Default: `Volume 1`, `Volume 2`
-- Supports custom labels with `-p` (prefix), `-s` (suffix), or `-v` (labels).
+- Applies language-specific volume labels based on the `-l` option (e.g., `-l ko` for Korean produces `제 1권`, `제 2권`).
+- Removes duplicate fonts across input EPUBs to optimize file size.
+- Supports natural sorting of input files (e.g., `love-8.epub`, `love-9.epub`, `love-10.epub` are sorted correctly) unless disabled with `-O`.
+- Allows customization of volume labels with `-p` (prefix), `-s` (suffix), or `-v` (custom labels, e.g., `-v "Part 1;Part 2;Part 3"`).
+- Outputs the merged EPUB to the current directory or a specified directory with `-d`.
 
-**Extracting**:
+**Extracting EPUB Files**:
 
-- Splits EPUBs merged by `epub-merge` into original files.
-- Restores original titles and TOC structures.
-- Standardizes OPF (`content.opf`), NCX (`toc.ncx`), and font directory (`fonts/`).
+- Splits a previously merged EPUB back into its original component EPUBs using the `-x` option.
+- Restores each original EPUB’s title, TOC, and structure, including standardized OPF (`content.opf`), NCX (`toc.ncx`), and font directory (`fonts/`).
+- Preserves all original metadata and content from the source EPUBs.
+
+**Examples in Action**:
+
+- **Merge with default settings**: Combine three EPUBs with natural sorting:
+
+  ```
+  epub-merge love-10.epub love-8.epub love-9.epub
+  ```
+
+  Output: `love.epub` with TOC:
+
+  ```
+  Volume 1
+    Chapter 1
+    Chapter 2
+  Volume 2
+    Chapter 3
+    Chapter 4
+  Volume 3
+    Chapter 5
+    Chapter 6
+  ```
+
+  Result: `love.epub: successfully created`.
+- **Merge with custom title**: Specify a custom title and output filename:
+
+  ```
+  epub-merge -t "Arabian Nights: Tales of 1,001 Nights" a1.epub a2.epub
+  ```
+
+  Output: `Arabian Nights_ Tales of 1,001 Nights.epub` with TOC labeled as `Volume 1`, `Volume 2`.
+- **Merge with Korean labels**: Use Korean language for volume labels:
+
+  ```
+  epub-merge -l ko novel-1.epub novel-2.epub
+  ```
+
+  Output: `novel.epub` with TOC:
+
+  ```
+  제 1권
+    Chapter 1
+    Chapter 2
+  제 2권
+    Chapter 3
+    Chapter 4
+  ```
+
+- **Custom volume labels**: Define specific volume labels:
+
+  ```
+  epub-merge -v "Love;Peace;Hate" story-1.epub story-2.epub story-3.epub
+  ```
+
+  Output: `story.epub` with TOC:
+
+  ```
+  Love
+    Chapter 1
+    Chapter 2
+  Peace
+    Chapter 3
+    Chapter 4
+  Hate
+    Chapter 5
+  ```
+
+- **Extract merged EPUB**: Split a merged EPUB back into originals:
+
+  ```
+  epub-merge -x love.epub
+  ```
+
+  Output: Restores `love-8.epub`, `love-9.epub`, `love-10.epub` with their original TOCs and metadata.
+- **Merge with prefix and suffix**: Add custom prefix and suffix to volume labels:
+
+  ```
+  epub-merge -p "Book " -s " Edition" part1.epub part2.epub
+  ```
+
+  Output: `part.epub` with TOC:
+
+  ```
+  Book 1 Edition
+    Chapter 1
+  Book 2 Edition
+    Chapter 2
+  ```
+
+### epub-meta
+
+**Reading Metadata**:
+
+- Displays standard metadata fields (e.g., title, author, language, ISBN) from an EPUB or standalone OPF file when no options are provided.
+- Outputs metadata in a clear, human-readable format for easy inspection.
+
+**Editing Metadata**:
+
+- Modifies specific metadata fields using command-line options (e.g., `-t` for title, `-a` for author).
+- Supports multiple values for fields like authors or subjects, separated by `//` (e.g., `-a "Author1//Author2"`).
+- Handles complex metadata like descriptions with CDATA for rich text formatting.
+- Updates metadata directly within the EPUB or OPF file while preserving other content.
+
+**Removing Metadata**:
+
+- Removes specific metadata fields by passing an empty string (`""`) as the value (e.g., `-t ""` to remove the title).
+
+**Examples in Action**:
+
+- **Read metadata**: Running `epub-meta book.epub` might output:
+
+  ```
+  Title: Brave New World
+  Author: Aldous Huxley
+  Language: en
+  ISBN: 978-3-16-148410-0
+  Description: A dystopian novel exploring a futuristic society.
+  Publisher: Chatto & Windus
+  Publication Date: 1932-01-01
+  ```
+
+- **Edit metadata**: To update the title and author:
+
+  ```
+  epub-meta -t "Brave New World Revised" -a "Aldous Huxley//John Doe" book.epub
+  ```
+
+  This updates the EPUB’s title to "Brave New World Revised" and sets two authors, preserving other metadata.
+- **Remove metadata**: To remove the ISBN:
+
+  ```
+  epub-meta -i "" book.epub
+  ```
+
+  This clears the ISBN field from the EPUB’s metadata.
+- **Add complex description**: To add a multi-line description with CDATA:
+
+  ```
+  epub-meta -d '<![CDATA[
+  <p>A dystopian novel about totalitarianism.</p>
+  <p>Published in 1949.</p>]]>' -t "1984" book.epub
+  ```
+
+  This sets a formatted description and updates the title to "1984".
+- **Multiple authors with sort names**: To set multiple authors with sorting metadata:
+
+  ```
+  epub-meta -a "Tom Waits--Waits, Tom//Lily Allen--Allen, Lily" book.epub
+  ```
+
+  This assigns two authors with their respective sort names for proper cataloging.
 
 ## Manuals
 
