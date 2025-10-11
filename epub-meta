@@ -207,7 +207,8 @@ split_xml_elements() {
 
 sed_split_xml_elements=$(cat << 'EOF'
 s#<dc:(title|publisher|subject|creator|description|rights|language\
-|contributor|date|identifier)(/>|[[:blank:]]+[^>]*/>)#<dc:\1\2></dc:\1>#g;
+|contributor|date|identifier)([[:space:]]*|[[:space:]]+[^>]*)/>\
+#<dc:\1\2></dc:\1>#g;
 s#(</dc:title[^>]*>|</dc:publisher[^>]*>|</dc:subject[^>]*>|</dc:creator[^>]*>\
 |</dc:description[^>]*>|</dc:rights[^>]*>|</dc:language[^>]*>\
 |</dc:contributor[^>]*>|</dc:identifier[^>]*>|</dc:date[^>]*>)#&\n#g;
@@ -393,7 +394,7 @@ readonly r_matching="(.*)(</dc:.*)"
 readonly sed_show_tags="
 /(<dc:title|<dc:publisher|<dc:subject|<dc:creator|<dc:description|<dc:rights\
 |<dc:language|<dc:date|<dc:contributor.*[\"']trl[\"']\
-|opf:scheme=[\"']ISBN[\"'])[^>]*>.+<\\/dc:/I {
+|opf:scheme=[\"']ISBN[\"'])[^>]*>[^<]*[^[:space:]][^<]*<\\/dc:/I {
 s#(<dc:title[^>]*>)${r_matching}#01${label_title}: \\2#
 s#(<[^>]*opf:role=[\"']trl[\"'][^>]*>)${r_matching}#06${label_translator}: \\2#
 s#(<dc:subject[^>]*>)${r_matching}#08${label_subject}: \\2#
