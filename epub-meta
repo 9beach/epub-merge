@@ -49,6 +49,7 @@ if [[ "${LANG:-ko_KR}" == ko* || -n "$LANG_IS_KR" ]]; then
 	readonly label_description="설명"
 	readonly label_published="출판일"
 	readonly label_modified="수정일"
+	readonly label_created="작성일"
 	readonly label_rights="권리"
 	readonly label_isbn="도서번호"
 else
@@ -61,6 +62,7 @@ else
 	readonly label_description="Description"
 	readonly label_published="Published"
 	readonly label_modified="Modified"
+	readonly label_created="Created"
 	readonly label_rights="Rights"
 	readonly label_isbn="ISBN"
 fi
@@ -333,9 +335,6 @@ build_modifying_filters() {
 	add_filters description
 	add_filters identifier opf:scheme ISBN isbn
 	add_filters rights
-	if [[ -n "$new_published" ]]; then
-		opf_filter+="<dc:date[[:space:]]*>|"
-	fi
 	add_filters date opf:event publication published
 	add_filters date opf:event modification modified
 
@@ -402,7 +401,7 @@ s#(<dc:description[^>]*>)${r_matching}#09${label_description}: \\2#
 s#(<dc:publisher[^>]*>)${r_matching}#10${label_publisher}: \\2#
 s#(<dc:date[^>]*publication[^>]*>)${r_matching}#12${label_published}: \\2#
 s#(<dc:date[^>]*modification[^>]*>)${r_matching}#13${label_modified}: \\2#
-s#(<dc:date[^>]*>)${r_matching}#12${label_published}: \\2#
+s#(<dc:date[^>]*>)${r_matching}#14${label_created}: \\2#
 s#(<dc:language[^>]*>)${r_matching}#25${label_language}: \\2#
 s#(<dc:rights[^>]*>)${r_matching}#27${label_rights}: \\2#
 s#(<[^>]*opf:scheme=.ISBN[^>]*>)${r_matching}#28${label_isbn}: \\2#

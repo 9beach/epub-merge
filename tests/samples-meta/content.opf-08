@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?><package xmlns="http://www.idpf.org/2007/opf" unique-identifier="bookid" version="2.0">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+    <dc:date>2017-12-07</dc:date>
     <meta content="cover.jpg" name="cover"/>
     <meta content="TestEbooks" name="TestEpubSource"/>
     <dc:title>뱀과물 (Snake And Water)</dc:title>
@@ -11,8 +12,8 @@
     <dc:subject>꿈</dc:subject>
     <dc:subject>몽환</dc:subject>
     <dc:publisher>문학동네</dc:publisher>
-    <dc:date opf:event="publication">2025-05-01</dc:date>
-    <dc:date opf:event="modification">2025-06-05</dc:date>
+    <dc:date opf:event="publication">2024-05-01</dc:date>
+    <dc:date opf:event="modification">2024-06-05</dc:date>
     <dc:rights>권리를 존중해주세요</dc:rights>
     <dc:language>en</dc:language>
     <dc:creator opf:role="aut">배수아</dc:creator>

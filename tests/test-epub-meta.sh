@@ -57,17 +57,17 @@ epub_meta -d '<![CDATA[
 epub_meta content.opf > 03.out
 cp -f content.opf content.opf-03
 
-epub_meta -i 'ISBN 978-89-9470-250-6 13191' -l en -m '2025-06-05' -u '2025-05-01' -p '문학동네' -s '문학//꿈//몽환' -x '권리를 존중해주세요' content.opf 2> 04.err
+epub_meta -i 'ISBN 978-89-9470-250-6 13191' -l en -m '2024-06-05' -u '2024-05-01' -p '문학동네' -s '문학//꿈//몽환' -x '권리를 존중해주세요' content.opf 2> 04.err
 epub_meta content.opf > 04.out
 cp -f content.opf content.opf-04
 
 # with -q option
-epub_meta -i 'ISBN 978-89-9470-250-6 13191' -l en -m '2025-06-05' -u '2025-05-01' -p '문학동네' -s '문학//꿈//몽환' -x '권리를 존중해주세요' -q content.opf 2> 05.err
+epub_meta -i 'ISBN 978-89-9470-250-6 13191' -l en -m '2024-06-05' -u '2024-05-01' -p '문학동네' -s '문학//꿈//몽환' -x '권리를 존중해주세요' -q content.opf 2> 05.err
 epub_meta content.opf > 05.out # Same to 04.out
 cp -f content.opf content.opf-05
 [[ ! -s 05.err ]]
 
-epub_meta -i 'ISBN 978-89-9470-250-6 13191' -l en -m '2025-06-05' -u '2025-05-01' -p '문학동네' -s '문학//꿈//몽환' -x '권리를 존중해주세요' content.opf 2> 06.err
+epub_meta -i 'ISBN 978-89-9470-250-6 13191' -l en -m '2024-06-05' -u '2024-05-01' -p '문학동네' -s '문학//꿈//몽환' -x '권리를 존중해주세요' content.opf 2> 06.err
 epub_meta content.opf > 06.out # Same to 04.out
 cp -f content.opf content.opf-06
 
@@ -104,10 +104,10 @@ echo "Basic OPF testing completed"
 
 echo "Basic EPUB testing started"
 
-cp "$epub_merge_test_dir/samples/original/sample1.epub" .
+cp "$epub_merge_test_dir/samples/original/sample1.epub" sample.epub
 
-epub_meta -a '배수아--배, 수아//Suah Bae--Bae, Suah' -t '뱀과물 (Snake And Water)' -r 'Deborah Smith' -i 'ISBN 978-89-9470-250-6 13191' -l ko -m '2025-06-05' -u '2025-05-01' -p '문학동네' -s '문학//꿈//몽환' -x '권리를 존중해주세요' sample1.epub 2> aa.err
-epub_meta sample1.epub > aa.out
+epub_meta -a '배수아--배, 수아//Suah Bae--Bae, Suah' -t '뱀과물 (Snake And Water)' -r 'Deborah Smith' -i 'ISBN 978-89-9470-250-6 13191' -l ko -m '2024-06-05' -u '2024-05-01' -p '문학동네' -s '문학//꿈//몽환' -x '권리를 존중해주세요' sample.epub 2> aa.err
+epub_meta sample.epub > aa.out
 
 diff aa.out ../aa.out
 diff aa.err ../aa.err
@@ -120,7 +120,7 @@ time ( for i in {1..50}; do epub_meta content.opf > /dev/null; done )
 echo
 echo "50 reads completed"
 
-time ( for i in {1..50}; do epub_meta -i 'ISBN 978-89-9470-250-6 13191' -l en -m '2025-06-05' -u '2025-05-01' -p '문학동네' -x '권리를 존중해주세요' -q content.opf; done )
+time ( for i in {1..50}; do epub_meta -i 'ISBN 978-89-9470-250-6 13191' -l en -m '2024-06-05' -u '2024-05-01' -p '문학동네' -x '권리를 존중해주세요' -q content.opf; done )
 
 echo
 echo "50 writes completed"
