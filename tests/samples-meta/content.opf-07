@@ -8,6 +8,7 @@
     <dc:description><![CDATA[
 <p>A dystopian novel about totalitarianism.</p>
 <p>Published in 1949.</p>
+
 ]]></dc:description>
     <dc:subject>문학</dc:subject>
     <dc:subject>꿈</dc:subject>
@@ -18,7 +19,9 @@
     <dc:rights>권리를 존중해주세요</dc:rights>
     <dc:language>en</dc:language>
     <dc:creator opf:role="aut">Bad
-Author</dc:creator>
+
+Author
+</dc:creator>
     <dc:creator opf:role="aut" opf:file-as="But has
 Lovely Name">Really Really
 Bad Author</dc:creator>

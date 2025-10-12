@@ -3,7 +3,7 @@
 export DEBUG="${DEBUG:-}"
 export LANG="ko_KR"
 
-trap 'echo "Error (epub-meta): at line $LINENO" >&2' ERR INT TERM
+trap 'echo "Error (test-epub-meta): at line $LINENO" >&2' ERR INT TERM
 
 cleanup() {
 	[[ -n "$temp_dir" ]] && rm -fr "$temp_dir" || true
@@ -48,17 +48,22 @@ echo "Basic OPF testing started"
 
 epub_meta -a '배수아--배, 수아//Suah Bae--Bae, Suah' -t '뱀과물 (Snake And Water)' -r 'Deborah Smith' content.opf 2> 02.err
 epub_meta content.opf > 02.out
+grep -q '배수아 \[배, 수아\]$' 02.out
 cp -f content.opf content.opf-02
 
 epub_meta -d '<![CDATA[
 <p>A dystopian novel about totalitarianism.</p>
 <p>Published in 1949.</p>
+
 ]]>' content.opf 2> 03.err
 epub_meta content.opf > 03.out
+grep -q '<!\[CDATA\[$' 03.out
+grep -q '^$' 03.out
 cp -f content.opf content.opf-03
 
 epub_meta -i 'ISBN 978-89-9470-250-6 13191' -l en -m '2024-06-05' -u '2024-05-01' -p '문학동네' -s '문학//꿈//몽환' -x '권리를 존중해주세요' content.opf 2> 04.err
 epub_meta content.opf > 04.out
+grep -q '문학$' 04.out
 cp -f content.opf content.opf-04
 
 # with -q option
@@ -77,11 +82,17 @@ diff 06.err 04.err
 
 epub_meta -i 'BAD
 ISBN XXXXX' -a "Bad
+
 Author
 //Really Really
 Bad Author--But has
 Lovely Name" content.opf 2> 07.err
 epub_meta content.opf > 07.out
+grep -q 'BAD$' 07.out
+grep -q 'Bad$' 07.out
+grep -q '^$' 07.out
+grep -q 'Really Really$' 07.out
+grep -q '^$' 07.out
 cp -f content.opf content.opf-07
 
 epub_meta -i 'ISBN 978-89-9470-250-6 13191' -a '배수아' -r 'Deborah Smith' content.opf 2> 08.err
@@ -94,7 +105,7 @@ cp -f content.opf content.opf-09
 
 diff 01.out ../01.out
 for i in {2..9}; do
-	diff_text 02
+	[[ $i != 5 ]] && diff_text 0$i
 	diff "0${i}.out" "../0${i}.out"
 	diff "0${i}.err" "../0${i}.err"
 	diff "content.opf-0${i}" "../content.opf-0${i}"
@@ -114,6 +125,8 @@ diff aa.err ../aa.err
 diff_text aa
 
 echo "Basic EPUB testing completed"
+
+exit
 
 time ( for i in {1..50}; do epub_meta content.opf > /dev/null; done )
 
