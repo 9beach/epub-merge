@@ -126,8 +126,6 @@ diff_text aa
 
 echo "Basic EPUB testing completed"
 
-exit
-
 time ( for i in {1..50}; do epub_meta content.opf > /dev/null; done )
 
 echo
