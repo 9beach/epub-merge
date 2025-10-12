@@ -3,7 +3,6 @@
 set -euo pipefail
 
 readonly DEBUG=${DEBUG:-}
-readonly CP_ALL_MERGED_FONTS=${CP_ALL_MERGED_FONTS:-}
 
 epub_version=""
 opf_files=()
@@ -1100,8 +1099,7 @@ create_individual_epubs() {
 
 		local different_fonts=""
 
-		if ! diff .fonts-list .all-fonts-list > /dev/null 2>&1 \
-				&& [[ -z "$CP_ALL_MERGED_FONTS" ]]; then
+		if ! diff .fonts-list .all-fonts-list > /dev/null 2>&1; then
 			different_fonts=1
 		fi
 
