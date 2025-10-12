@@ -3,6 +3,7 @@
 set -euo pipefail
 
 readonly DEBUG=${DEBUG:-}
+readonly CP_ALL_MERGED_FONTS=${CP_ALL_MERGED_FONTS:-}
 
 epub_version=""
 opf_files=()
@@ -143,8 +144,8 @@ error() {
 
 # --- XML utility functions
 
-readonly xml_formatter_warning='The XML formatter is not installed, which \
-may cause errors during the merge process. Please install xmllint.'
+readonly xml_formatter_warning='The XML formatter is not installed, which "\
+"may cause errors during the merge process. Please install xmllint.'
 
 if command -v xmllint &> /dev/null; then
 	xml_formatter="xmllint"
@@ -155,8 +156,8 @@ else
 	log "$xml_formatter_warning"
 fi
 
-readonly python3_xml_formatter="import xml.dom.minidom as x,sys; \
-print(x.parseString(open(sys.argv[1]).read()).toprettyxml(indent='    '))"
+readonly python3_xml_formatter="import xml.dom.minidom as x,sys; "\
+"print(x.parseString(open(sys.argv[1]).read()).toprettyxml(indent='  '))"
 
 if [[ "$xml_formatter" == "xmllint" ]]; then
 	format_xml() {
@@ -1093,12 +1094,14 @@ create_individual_epubs() {
 		[[ -f .epub-merge/"$i".nav ]] \
 			&& cp .epub-merge/"$i".nav "$i/$nav_file"
 
-		sed -n 's/.*href="\(fonts\/[^"]*\)".*/\1/p' "$i"/content.opf \
+		grep -v '<!--' "$i"/content.opf \
+			| sed -n 's/.*href="\(fonts\/[^"]*\)".*/\1/p' \
 			| sort -V > .fonts-list || true
 
 		local different_fonts=""
 
-		if ! diff .fonts-list .all-fonts-list > /dev/null 2>&1; then
+		if ! diff .fonts-list .all-fonts-list > /dev/null 2>&1 \
+				&& [[ -z "$CP_ALL_MERGED_FONTS" ]]; then
 			different_fonts=1
 		fi
 
