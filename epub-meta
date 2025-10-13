@@ -221,17 +221,6 @@ EOF
 )
 readonly sed_split_xml_elements
 
-# --- Metadata display
-
-show_tags() {
-	# Parse OPF XML and output readable metadata (title, author, etc.)
-	# Supports Korean or English labels. Filters and cleans XML tags.
-	sed -nE "$sed_show_tags" ${1:+"$1"} \
-		| sort -V \
-		| sed -E "s#</dc:.*##; s#^..##; s:^(.*) \[Unknown\]$:\1:" \
-		| unescape_xml
-}
-
 # --- Metadata edit
 
 echo_multi_tags() {
@@ -296,7 +285,7 @@ format_opf() {
 		| grep -Ev '^[[:blank:]]+$'
 }
 
-add_filters() {
+build_element_filters() {
 	# Build filters for colorizing modified attributes and removing 
 	# old values
 	local element="$1" content="new_${4:-$1}"
@@ -318,27 +307,27 @@ add_filters() {
 	fi
 }
 
-build_modifying_filters() {
+build_all_filters() {
 	# These are used to remove specific XML elements and format output 
 	# messages.
 	#
 	# Example removing_filter: "<dc:publisher[^>]*>|<dc:subject[^>]*>"
 	# Example color_filter: "Publisher:.*|Subject:.*|Title:.*"
-	add_filters title
+	build_element_filters title
 	if [[ -n "$new_author" ]]; then
 		removing_filter+="<dc:creator[[:blank:]]*>|"
 	fi
-	add_filters creator opf:role aut author
-	add_filters creator opf:role trl translator
-	add_filters translator opf:role trl translator
-	add_filters publisher
-	add_filters subject
-	add_filters language
-	add_filters description
-	add_filters identifier opf:scheme ISBN isbn
-	add_filters rights
-	add_filters date opf:event publication published
-	add_filters date opf:event modification modified
+	build_element_filters creator opf:role aut author
+	build_element_filters creator opf:role trl translator
+	build_element_filters translator opf:role trl translator
+	build_element_filters publisher
+	build_element_filters subject
+	build_element_filters language
+	build_element_filters description
+	build_element_filters identifier opf:scheme ISBN isbn
+	build_element_filters rights
+	build_element_filters date opf:event publication published
+	build_element_filters date opf:event modification modified
 
 	removing_filter="${removing_filter%?}"
 	color_filter="${color_filter%?}"
@@ -390,7 +379,6 @@ fi
 
 # --- Read metadata
 
-# Parse OPF XML and output readable metadata (title, author, etc.).
 readonly r_matching="(.*)(</dc:.*)"
 readonly sed_show_tags="
 /(<dc:title|<dc:publisher|<dc:subject|<dc:creator|<dc:description|<dc:rights\
@@ -420,6 +408,16 @@ p
 }
 "
 
+show_tags() {
+	# Parse OPF XML and output readable metadata (title, author, etc.)
+	# Supports Korean or English labels. Filters and cleans XML tags.
+	sed -nE "$sed_show_tags" ${1:+"$1"} \
+		| sort -V \
+		| sed -E "s#</dc:.*##; s#^..##; s:^(.*) \[Unknown\]$:\1:" \
+		| unescape_xml
+}
+
+
 if [[ "$edit_mode" == false ]]; then
 	# No edit option, then read metadata and exit.
 	if [[ -z "$opf_file" ]]; then
@@ -433,7 +431,7 @@ fi
 
 # --- Edit metadata
 
-build_modifying_filters
+build_all_filters
 
 temp_dir=$(mktemp -d)
 readonly temp_dir

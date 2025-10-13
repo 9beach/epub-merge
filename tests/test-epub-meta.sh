@@ -1,6 +1,7 @@
 #!/bin/bash
 
 export DEBUG="${DEBUG:-}"
+export NO_TIME_TESTING="${NO_TIME_TESTING:-}"
 export LANG="ko_KR"
 
 trap 'echo "Error (test-epub-meta): at line $LINENO" >&2' ERR INT TERM
@@ -48,7 +49,11 @@ echo "Basic OPF testing started"
 
 epub_meta -a '배수아--배, 수아//Suah Bae--Bae, Suah' -t '뱀과물 (Snake And Water)' -r 'Deborah Smith' content.opf 2> 02.err
 epub_meta content.opf > 02.out
-grep -q '배수아 \[배, 수아\]$' 02.out
+grep -q '^제목: 뱀과물 (Snake And Water)$' 02.out
+grep -q '^작가: 배수아 \[배, 수아\]$' 02.out
+grep -q '^작가: Suah Bae \[Bae, Suah\]$' 02.out
+grep -q '^번역: Deborah Smith$' 02.out
+grep -q '^작성일: 2017-12-07$' 02.out
 cp -f content.opf content.opf-02
 
 epub_meta -d '<![CDATA[
@@ -57,13 +62,28 @@ epub_meta -d '<![CDATA[
 
 ]]>' content.opf 2> 03.err
 epub_meta content.opf > 03.out
-grep -q '<!\[CDATA\[$' 03.out
-grep -q '^$' 03.out
+grep -q '^설명: <!\[CDATA\[$' 03.out
+grep -q '^<p>A dystopian novel about totalitarianism.</p>$' 03.out
+grep -q '^<p>Published in 1949.</p>$' 03.out
+grep -q '^]]>$' 03.out
 cp -f content.opf content.opf-03
 
 epub_meta -i 'ISBN 978-89-9470-250-6 13191' -l en -m '2024-06-05' -u '2024-05-01' -p '문학동네' -s '문학//꿈//몽환' -x '권리를 존중해주세요' content.opf 2> 04.err
 epub_meta content.opf > 04.out
-grep -q '문학$' 04.out
+grep -q '^주제: 문학$' 04.out
+grep -q '^주제: 꿈$' 04.out
+grep -q '^주제: 몽환$' 04.out
+grep -q '^출판일: 2024-05-01$' 04.out
+grep -q '^수정일: 2024-06-05$' 04.out
+grep -q '^작성일: 2017-12-07$' 04.out
+grep -q '^권리: 권리를 존중해주세요$' 04.out
+grep -q '^도서번호: ISBN 978-89-9470-250-6 13191$' 04.out
+grep -q '^출판사: 문학동네$' 04.out
+grep -q '^설명: <!\[CDATA\[$' 04.out
+grep -q '^<p>A dystopian novel about totalitarianism.</p>$' 04.out
+grep -q '^<p>Published in 1949.</p>$' 04.out
+grep -q '^$' 04.out
+grep -q '^]]>$' 04.out
 cp -f content.opf content.opf-04
 
 # with -q option
@@ -71,13 +91,15 @@ epub_meta -i 'ISBN 978-89-9470-250-6 13191' -l en -m '2024-06-05' -u '2024-05-01
 epub_meta content.opf > 05.out # Same to 04.out
 cp -f content.opf content.opf-05
 [[ ! -s 05.err ]]
+diff 05.out 04.out
 
 epub_meta -i 'ISBN 978-89-9470-250-6 13191' -l en -m '2024-06-05' -u '2024-05-01' -p '문학동네' -s '문학//꿈//몽환' -x '권리를 존중해주세요' content.opf 2> 06.err
 epub_meta content.opf > 06.out # Same to 04.out
 cp -f content.opf content.opf-06
 
-diff 05.out 04.out
+diff content.opf-05 content.opf-04
 diff 06.out 04.out
+diff content.opf-06 content.opf-04
 diff 06.err 04.err
 
 epub_meta -i 'BAD
@@ -120,11 +142,22 @@ cp "$epub_merge_test_dir/samples/original/sample1.epub" sample.epub
 epub_meta -a '배수아--배, 수아//Suah Bae--Bae, Suah' -t '뱀과물 (Snake And Water)' -r 'Deborah Smith' -i 'ISBN 978-89-9470-250-6 13191' -l ko -m '2024-06-05' -u '2024-05-01' -p '문학동네' -s '문학//꿈//몽환' -x '권리를 존중해주세요' sample.epub 2> aa.err
 epub_meta sample.epub > aa.out
 
+grep -q '^주제: 문학$' aa.out
+grep -q '^주제: 꿈$' aa.out
+grep -q '^주제: 몽환$' aa.out
+grep -q '^출판일: 2024-05-01$' aa.out
+grep -q '^수정일: 2024-06-05$' aa.out
+grep -q '^권리: 권리를 존중해주세요$' aa.out
+grep -q '^도서번호: ISBN 978-89-9470-250-6 13191$' aa.out
+grep -q '^출판사: 문학동네$' aa.out
+
 diff aa.out ../aa.out
 diff aa.err ../aa.err
 diff_text aa
 
 echo "Basic EPUB testing completed"
+
+[[ -n "$NO_TIME_TESTING" ]] && exit
 
 time ( for i in {1..50}; do epub_meta content.opf > /dev/null; done )
 
