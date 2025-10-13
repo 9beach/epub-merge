@@ -20,6 +20,9 @@ readonly opf_header="header"        # Original OPF header path
 readonly new_opf_header="newhdr"    # Modified OPF header path
 readonly opf_footer="footer"        # OPF footer path
 
+iconv_has_utf_8_mac="$(iconv -l | grep "UTF-8-MAC" || true)"
+readonly iconv_has_utf_8_mac
+
 # --- From args
 
 new_title=""
@@ -278,11 +281,18 @@ format_opf() {
 	#   - combine modified header and untouched footer,
 	#   - normalize line breaks,
 	#   - strip blank lines.
-	cat "$new_opf_header" "$opf_footer" \
-		| tr -d '\n' \
-		| split_real_lf \
-		| tr '\r' '\n' \
-		| grep -Ev '^[[:blank:]]+$'
+	{
+		if [[ -n "$iconv_has_utf_8_mac" ]]; then
+			iconv -f UTF-8-MAC -t UTF-8 "$new_opf_header"
+		else
+			cat "$new_opf_header"
+		fi
+		cat "$opf_footer"
+	} \
+	| tr -d '\n' \
+	| split_real_lf \
+	| tr '\r' '\n' \
+	| grep -Ev '^[[:blank:]]+$'
 }
 
 build_element_filters() {
@@ -480,7 +490,7 @@ sed -E 's#^.*[^[:blank:]]([[:blank:]]*</metadata>.*)#\1#' "$epub_opf" \
 
 if [[ -z "$opf_file" ]]; then
 	format_opf > "$epub_opf"
-	zip -q "$epub_file" "$epub_opf"
+	zip -q -Xr9D "$epub_file" "$epub_opf"
 else
 	format_opf > "$opf_file"
 fi
