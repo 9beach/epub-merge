@@ -156,16 +156,53 @@ diff aa.out ../aa.out
 diff aa.err ../aa.err
 diff_text aa
 
+mv content.opf content.opf-bak
+
+# Get cover
+epub-meta -S cover sample.epub 2> /dev/null
+unzip -q sample.epub OPS/images/9780316000000.jpg
+diff cover.jpg OPS/images/9780316000000.jpg
+
+# Remove cover meta and fix it
+unzip -q sample.epub content.opf
+grep -q '<meta name="cover" content="cover"/>' content.opf
+grep -v '<meta name="cover" content="cover"/>' content.opf > x \
+	&& mv x content.opf
+zip -q sample.epub content.opf
+! unzip -p sample.epub content.opf \
+	| grep '<meta name="cover" content="cover"/>'
+epub-meta -f sample.epub 2> /dev/null
+unzip -p sample.epub content.opf \
+	| grep '<meta content="cover" name="cover"/>' > /dev/null
+
+# Overwrite cover
+unzip -l sample.epub | grep '348700.*OPS.*9780316000000.jpg' > /dev/null
+cat cover.jpg cover.jpg > new-cover.jpg
+epub-meta -C new-cover.jpg sample.epub 2> /dev/null
+unzip -l sample.epub | grep '697400.*OPS.*9780316000000.jpg' > /dev/null
+
+# Add new cover
+epub-meta -c cover.jpg sample.epub 2> /dev/null
+unzip -l sample.epub | grep '697400.*OPS.*9780316000000.jpg' > /dev/null
+unzip -l sample.epub | grep '348700.*  cover-[0-9][0-9]*.jpg' > /dev/null
+epub-meta -C new-cover.jpg sample.epub 2> /dev/null
+unzip -l sample.epub | grep '697400.*OPS.*9780316000000.jpg' > /dev/null
+unzip -l sample.epub | grep '697400.*  cover-[0-9][0-9]*.jpg' > /dev/null
+
 echo "Basic EPUB testing completed"
+
+mv content.opf-bak content.opf 
 
 [[ -n "$NO_TIME_TESTING" ]] && exit
 
-time ( for i in {1..50}; do epub_meta content.opf > /dev/null; done )
+times=100
+
+time ( for i in $(seq 1 $times); do epub_meta content.opf > /dev/null; done )
 
 echo
-echo "50 reads completed"
+echo "$times reads completed"
 
-time ( for i in {1..50}; do epub_meta -i 'ISBN 978-89-9470-250-6 13191' -l en -m '2024-06-05' -u '2024-05-01' -p '문학동네' -x '권리를 존중해주세요' -q content.opf; done )
+time ( for i in $(seq 1 $times); do epub_meta -i 'ISBN 978-89-9470-250-6 13191' -l en -m '2024-06-05' -u '2024-05-01' -p '문학동네' -x '권리를 존중해주세요' -q content.opf; done )
 
 echo
-echo "50 writes completed"
+echo "$times writes completed"

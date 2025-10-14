@@ -459,12 +459,8 @@ parse_args() {
 		esac
 	done
 
-	readonly output_dir
-	readonly overwrite_existing
-	readonly do_not_sort_params
-	readonly quiet_mode
-	readonly extract_mode
-	readonly toc_volume_given
+	readonly overwrite_existing output_dir extract_mode \
+		toc_volume_given do_not_sort_params quiet_mode 
 }
 
 validate_args() {
