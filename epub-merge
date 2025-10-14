@@ -236,6 +236,11 @@ extract_and_modify_xml() {
 	# Extract content between XML tags and modify paths/IDs
 	debug_func "$@"
 	local tag="$1" pattern="$2" dir="$3" suffix="$4"
+	if [[ "$dir" == "0" ]]; then
+		local remove_cover=''
+	else
+		local remove_cover='s/properties=.cover-image.//g'
+	fi
 
 	sed -E "
 	/<${tag}[^>]*${pattern}[^>]*>/,/<\/${tag}/!d
@@ -243,6 +248,7 @@ extract_and_modify_xml() {
 	/^$/d
 	s:(src|href)=\":&$dir/:g
 	s:(id|idref)=\"[^\"]*:&-${suffix}:g
+	$remove_cover
 	" ${5:+"$5"}
 }
 

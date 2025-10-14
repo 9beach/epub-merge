@@ -5,7 +5,12 @@ set -euo pipefail
 readonly DEBUG=${DEBUG:-}  # Debug output toggle.
 
 quiet_mode=""              # Suppress non-critical logs.
-edit_mode=false            # If false, show metadata; if true, modify.
+edit_mode=""               # If not set, show metadata; if set, modify.
+fix_cover=""               # Fix cover if set
+set_cover=""               # Set new cover if set
+replace_cover=""           # Replace existing cover if set
+extract_cover=""           # Extract cover if set
+
 epub_file=""               # Input EPUB file path.
 opf_file=""                # Input OPF file path (if given).
 epub_opf=""                # Path to OPF inside EPUB.
@@ -17,7 +22,7 @@ readonly real_lf=$'\037'   # Internal field separator for XML line handling.
 
 readonly removing="<removed>"       # Marker for deleting a field.
 readonly opf_header="header"        # Original OPF header path
-readonly new_opf_header="newhdr"    # Modified OPF header path
+readonly new_opf_header="newhr"     # Modified OPF header path
 readonly opf_footer="footer"        # OPF footer path
 
 iconv_has_utf_8_mac="$(iconv -l | grep "UTF-8-MAC" || true)"
@@ -55,6 +60,7 @@ if [[ "${LANG:-ko_KR}" == ko* || -n "$LANG_IS_KR" ]]; then
 	readonly label_created="작성일"
 	readonly label_rights="권리"
 	readonly label_isbn="도서번호"
+	readonly label_cover="커버"
 else
 	readonly label_title="Title"
 	readonly label_author="Author"
@@ -68,6 +74,7 @@ else
 	readonly label_created="Created"
 	readonly label_rights="Rights"
 	readonly label_isbn="ISBN"
+	readonly label_cover="Cover"
 fi
 
 # --- Utility functions
@@ -78,26 +85,28 @@ show_usage() {
 epub-meta -- read and edit metadata in an ePUB or OPF file
 
 Usage:
-  epub-meta [-q] [-t title] [-a author] [-r translator] [-x rights] [-i ISBN]
-            [-s subject] [-l language] [-d description] [-p publisher]
-            [-u published] [-m modified] {epub-file | opf-file}
+  epub-meta [options] {epub-file | opf-file}
 
 Options:
-  -a author      Set author(s). Multiple authors are allowed, separated by "//".
-                 Each author may optionally include a sort name, for example:
-                 "Tom Waits--Waits, Tom//Lily Allen--Allen, Lily//Beck".
-  -d description Set description (supports CDATA).
-  -i ISBN        Set ISBN.
-  -l language    Set language (e.g., en, ko).
-  -m modified    Set modification date.
-  -p publisher   Set publisher.
-  -q             Quiet mode, suppress progress messages.
-  -r translator  Set translator(s) (same format as -a).
-  -s subject     Set subject(s) (multiple separated by '//').
-  -t title       Set title.
-  -u published   Set publication date (e.g., "2016-07-31").
-  -x rights      Set rights/copyright info.
-  -h             Show this help message.
+  -a AUTHOR      Set author(s). Multiple authors separated by "//".
+                 Format: "Name" or "Name--Sort Name"
+                 (e.g., "Bob Marley//Tom Waits--Waits, Tom")
+  -c FILE        Set new cover image from FILE
+  -C FILE        Replace cover image from FILE
+  -d DESC        Set description
+  -f             Auto-fix cover image configuration
+  -i ISBN        Set ISBN
+  -l LANG        Set language (e.g., en, ko)
+  -m DATE        Set modification date
+  -p PUBLISHER   Set publisher
+  -q             Quiet mode (suppress progress messages)
+  -r TRANSLATOR  Set translator(s) (same format as -a)
+  -s SUBJECT     Set subject(s) (multiple separated by '//')
+  -S PATH        Extract cover image to PATH (extension auto-added)
+  -t TITLE       Set title
+  -u DATE        Set publication date (e.g., "2016-07-31")
+  -x RIGHTS      Set rights/copyright info
+  -h             Show this help message
 
 Notes:
   - Use empty string ("") to remove a metadata field.
@@ -343,27 +352,42 @@ build_all_filters() {
 	color_filter="${color_filter%?}"
 }
 
+make_output() {
+	# Make final output
+	if [[ -z "$opf_file" ]]; then
+		format_opf > "$epub_opf"
+		zip -q -Xr9D "$epub_file" "$(dirname "$epub_opf")"
+	else
+		format_opf > "$opf_file"
+	fi
+}
+
 # --- Start main routine
 
-trap 'printf "\033[31mError ($(basename "$0")): at line $LINENO\033[0m\n" >&2; \
-	cleanup' ERR INT TERM
+trap 'printf "\033[31mError ($(basename "$0")): at line '\
+'$LINENO: $BASH_COMMAND\033[0m\n" >&2; cleanup' ERR INT TERM
+
 trap cleanup EXIT
 
-while getopts "t:a:r:p:s:l:d:i:x:u:m:qh" opt; do
+while getopts "t:a:r:p:s:l:d:i:x:c:C:S:u:m:qhC" opt; do
 	# shellcheck disable=SC2034
 	case $opt in
-		t) new_title="${OPTARG:-$removing}"; edit_mode=true ;;
-		a) new_author="${OPTARG:-$removing}"; edit_mode=true ;;
-		r) new_translator="${OPTARG:-$removing}"; edit_mode=true ;;
-		p) new_publisher="${OPTARG:-$removing}"; edit_mode=true ;;
-		s) new_subject="${OPTARG:-$removing}"; edit_mode=true ;;
-		l) new_language="${OPTARG:-$removing}"; edit_mode=true ;;
-		d) new_description="${OPTARG:-$removing}"; edit_mode=true ;;
-		i) new_isbn="${OPTARG:-$removing}"; edit_mode=true ;;
-		x) new_rights="${OPTARG:-$removing}"; edit_mode=true ;;
-		u) new_published="${OPTARG:-$removing}"; edit_mode=true ;;
-		m) new_modified="${OPTARG:-$removing}"; edit_mode=true ;;
+		t) new_title="${OPTARG:-$removing}"; edit_mode=1 ;;
+		a) new_author="${OPTARG:-$removing}"; edit_mode=1 ;;
+		c) set_cover="$(realpath "${OPTARG}")" ;;
+		C) replace_cover="$(realpath "${OPTARG}")" ;;
+		f) fix_cover=1 ;;
+		S) extract_cover="$(realpath "$(dirname "${OPTARG}")")/$(basename "${OPTARG}")" ;;
 		q) quiet_mode=1 ;;
+		r) new_translator="${OPTARG:-$removing}"; edit_mode=1 ;;
+		p) new_publisher="${OPTARG:-$removing}"; edit_mode=1 ;;
+		s) new_subject="${OPTARG:-$removing}"; edit_mode=1 ;;
+		l) new_language="${OPTARG:-$removing}"; edit_mode=1 ;;
+		d) new_description="${OPTARG:-$removing}"; edit_mode=1 ;;
+		i) new_isbn="${OPTARG:-$removing}"; edit_mode=1 ;;
+		x) new_rights="${OPTARG:-$removing}"; edit_mode=1 ;;
+		u) new_published="${OPTARG:-$removing}"; edit_mode=1 ;;
+		m) new_modified="${OPTARG:-$removing}"; edit_mode=1 ;;
 		h) show_usage ;;
 		\?) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
 		:) echo "Option -$OPTARG requires an argument." >&2; exit 1 ;;
@@ -385,6 +409,21 @@ if [[ -n "$epub_file" ]]; then
 	if [[ -z "$epub_opf" ]]; then
 		error "OPF file not found."
 	fi
+fi
+
+if [[ -z "$epub_file" ]]; then
+	if [[ -n "$fix_cover" || -n "$set_cover" || -n "$extract_cover" \
+			|| -n "$replace_cover" ]]; then
+		error 'cover-related options cannot be used with OPF file'
+	fi
+fi
+
+if [[ -n "$fix_cover" && ( -n "$set_cover" || -n "$replace_cover" ) ]]; then
+	error "Option '-f' cannot be used with '-c' or '-C'"
+fi
+
+if [[ -n "$set_cover" && -n "$replace_cover" ]]; then
+	error "Option '-c' and '-C' cannot be used together"
 fi
 
 # --- Read metadata
@@ -427,8 +466,8 @@ show_tags() {
 		| unescape_xml
 }
 
-
-if [[ "$edit_mode" == false ]]; then
+if [[ -z "$edit_mode" && -z "$fix_cover" && -z "$extract_cover" \
+		&& -z "$set_cover" && -z "$replace_cover" ]]; then
 	# No edit option, then read metadata and exit.
 	if [[ -z "$opf_file" ]]; then
 		unzip -p "$epub_file" "$epub_opf"
@@ -436,6 +475,8 @@ if [[ "$edit_mode" == false ]]; then
 		cat "$opf_file"
 	fi \
 	| split_xml_elements | show_tags | split_real_lf
+
+	debug "exit after first show_tags"
 	exit 0
 fi
 
@@ -470,23 +511,35 @@ sed -E 's#[[:blank:]]*</metadata>.*##' "$epub_opf" \
 sed -E 's#^.*[^[:blank:]]([[:blank:]]*</metadata>.*)#\1#' "$epub_opf" \
 	> "$opf_footer"
 
-{
-	# Remove elements to be replaced
-	grep -E -v "$removing_filter" "$opf_header"
+if [[ -n "$edit_mode" ]]; then
+	{
+		# Remove elements to be replaced
+		grep -E -v "$removing_filter" "$opf_header" || true
 
-	# Print new elements
-	echo_new_tags title
-	SUPPORT_MULTI_VALUES=1 echo_new_tags creator opf:role aut author 
-	SUPPORT_MULTI_VALUES=1 echo_new_tags creator opf:role trl translator 
-	SUPPORT_MULTI_VALUES=1 echo_new_tags subject subject
-	echo_new_tags publisher
-	echo_new_tags date opf:event publication published 
-	echo_new_tags date opf:event modification modified 
-	echo_new_tags rights
-	echo_new_tags identifier opf:scheme ISBN isbn 
-	echo_new_tags description
-	echo_new_tags language
-} > "$new_opf_header"
+		# Print new elements
+		echo_new_tags title
+		SUPPORT_MULTI_VALUES=1 echo_new_tags \
+			creator opf:role aut author 
+		SUPPORT_MULTI_VALUES=1 echo_new_tags \
+			creator opf:role trl translator 
+		SUPPORT_MULTI_VALUES=1 echo_new_tags subject subject
+		echo_new_tags publisher
+		echo_new_tags date opf:event publication published 
+		echo_new_tags date opf:event modification modified 
+		echo_new_tags rights
+		echo_new_tags identifier opf:scheme ISBN isbn 
+		echo_new_tags description
+		echo_new_tags language
+	} > "$new_opf_header"
+else
+	cp "$opf_header" "$new_opf_header"
+fi
+
+if [[ -z "$quiet_mode" && -n "$edit_mode" ]]; then
+	show_tags "$new_opf_header" \
+		| sed -E "s/$color_filter/\x1b[32m&\x1b[0m/g" \
+		| split_real_lf | tr '\r' '\n' >&2
+fi
 
 if [[ -z "$opf_file" ]]; then
 	format_opf > "$epub_opf"
@@ -495,8 +548,303 @@ else
 	format_opf > "$opf_file"
 fi
 
-if [[ "$quiet_mode" -ne 1 ]]; then
-	show_tags "$new_opf_header" \
-		| sed -E "s/$color_filter/\x1b[32m&\x1b[0m/g" \
-		| split_real_lf | tr '\r' '\n' >&2
+if [[ -z "$fix_cover" && -z "$extract_cover" && -z "$set_cover" \
+		&& -z "$replace_cover" ]]; then
+	debug "exit after second show_tags"
+	exit
+fi
+
+# --- Handle cover
+
+if [[ "$OSTYPE" == "darwin"* ]]; then
+	sed_i() {
+		sed -i '' "$@"
+	}
+else
+	sed_i() {
+		sed -i "$@"
+	}
+fi
+
+epub_version="$(grep -om1 'package[^>]*version="[0-9.]*"' "$opf_header" \
+	| grep -om1 'version=.[0-9.]*.' | cut -d'"' -f2)"
+readonly epub_version
+
+cover_meta_found=""
+if grep -qom1 "<meta[^>]*name=.cover[\"'][^>]*>" "$epub_opf"; then
+	cover_meta_found=1
+fi
+
+get_media_type() {
+	# Get MIME type from file extension
+	case "${1##*.}" in
+		jpg|jpeg) echo "image/jpeg" ;;
+		png)      echo "image/png" ;;
+		gif)      echo "image/gif" ;;
+		svg)      echo "image/svg+xml" ;;
+		webp)     echo "image/webp" ;;
+		avif)     echo "image/avif" ;;
+		*)        echo "application/octet-stream" ;;
+	esac
+}
+
+change_cover_id() {
+	local id="$1"
+	local sed_cover_meta_replace="s|<meta[^>]*name=[\"\x27]cover"\
+"[\"\x27][^>]*>|<meta content=\"$id\" name=\"cover\"/>|"
+	local echo_cover_meta="${indent}${indent}<meta content=\"$id\" "\
+"name=\"cover\"/>${real_lf}"
+
+	debug "change cover id"
+	if [[ -n "$cover_meta_found" ]]; then
+		sed_i "$sed_cover_meta_replace" "$new_opf_header"
+	else
+		echo "$echo_cover_meta" >> "$new_opf_header"
+		cover_meta_found=1
+	fi
+
+	if [[ "$epub_version" != "2.0" ]]; then
+		debug "set ePUB3 cover-image properties: $id"
+		sed -E -e 's/properties="cover-image"//g' \
+			-e "s#<ite.*id=[\"']$id[\"']#& properties=\"cover-image\"#" \
+			"$opf_footer" \
+			> "$opf_footer".new && mv -f "$opf_footer".new "$opf_footer"
+	fi
+}
+
+find_cover_id_of_html() {
+	# Get id of image in html ($2) from OPF ($1)
+	# find_cover_id_of_html "OEBPS/content.opf" "Text/cover.html"
+
+	local opf_path="$1"
+	local relative_html_path="$2"
+
+	# Get directory of OPF file
+	local opf_dir
+	opf_dir=$(dirname "$opf_path")
+
+	# Construct full path to HTML file
+	local html_path="${opf_dir}/${relative_html_path}"
+
+	# Extract first image filename from HTML (e.g., "cover.jpg")
+	local img_filename
+	img_filename=$(grep -o \
+			'<img[^>]*src=["'"'"'][^"'"'"']*["'"'"']' "$html_path" \
+		| head -n1 \
+		| sed -E 's/.*src=["'"'"']([^"'"'"']*)["'"'"'].*/\1/' \
+		| xargs basename)
+
+	# Find <item> in OPF whose href ends with the image filename
+	local item_line
+	local grep_cover='<item[^>]*href=["'"'"'][^"'"'"']*'
+	grep_cover+="$img_filename"'["'"'"'][^>]*>'
+	item_line=$(grep -om1 "$grep_cover" "$opf_path" | head -n1)
+
+	# Extract id and href from the <item> tag
+	local id href
+	id=$(echo "$item_line" \
+		| sed -E 's/.*id=["'"'"']([^"'"'"']*)["'"'"'].*/\1/')
+	href=$(echo "$item_line" \
+		| sed -E 's/.*href=["'"'"']([^"'"'"']*)["'"'"'].*/\1/')
+
+	# Output: id<TAB>href
+	echo -e "${id}\t${href}"
+}
+
+readonly cover_opf="$epub_opf.cover"
+sed 's/</\n</g' "$epub_opf" > "$cover_opf"
+
+id_href="$(awk '
+	# Extract attribute value from a line
+	# Args: line - the XML line to parse, attr - attribute name to extract
+	# Returns: attribute value or empty string if not found
+	function extract_attr(line, attr) {
+		regex = attr "[[:space:]]*=[[:space:]]*[\"'\''][^\"'\'']*[\"'\'']"
+		if (match(tolower(line), tolower(regex))) {
+			val = substr(line, RSTART, RLENGTH)
+			# Remove attribute name and quotes
+			gsub(/^[^=]*=[[:space:]]*["\047]/, "", val)
+			gsub(/["\047][[:space:]]*$/, "", val)
+			return val
+		}
+		return ""
+	}
+	
+	BEGIN {
+		meta_cover_id = ""   # ID from <meta name="cover" content="...">
+		cover_found = 0	     # Flag: cover already found and printed
+		candidate_id = ""    # ID of candidate cover
+		candidate_href = ""  # href of candidate cover
+		guide_href = ""      # href from <guide><reference type="cover">
+		first_img_id = ""    # First image item id (fallback)
+		first_img_href = ""  # First image item href (fallback)
+	
+		sp = "[[:space:]]*"
+		q = "[\"\\047]"
+		meta_pattern = "<meta[^>]*name" sp "=" sp q "cover" q
+		reference_pattern = "<reference[^>]*type" sp "=" sp q "cover" q
+	}
+	
+	# Process each line of the OPF file
+	{
+		line = $0
+		line_lower = tolower(line)
+		
+		# 1. Search for <meta name="cover" content="...">
+		if (meta_cover_id == "" && line_lower ~ meta_pattern) {
+			content = extract_attr(line, "content")
+			if (content != "") {
+				meta_cover_id = content
+			}
+		}
+		
+		# 2. Process <item> tags in manifest
+		if (line_lower ~ /<item[^>]*>/) {
+			id = extract_attr(line, "id")
+			href = extract_attr(line, "href")
+			props = extract_attr(line, "properties")
+			media = extract_attr(line, "media-type")
+			
+			media_lower = tolower(media)
+			
+			# Only process image media types
+			if (media_lower ~ /^image\//) {
+				
+				# Store first image as fallback
+				if (first_img_href == "") {
+					first_img_id = id
+					first_img_href = href
+				}
+				
+				# EPUB 3: properties="cover-image"
+				if (tolower(props) ~ /cover-image/) {
+					print id "\t" href
+					cover_found = 1
+					exit
+				}
+				
+				# Store candidate if id or href contains "cover"
+				id_lower = tolower(id)
+				href_lower = tolower(href)
+				if ((id_lower ~ /cover/ || href_lower ~ /cover/) \
+						&& candidate_href == "") {
+					candidate_id = id
+					candidate_href = href
+				}
+				
+				# Match with meta cover id (EPUB 2 standard)
+				if (meta_cover_id != "" && id == meta_cover_id) {
+					print id "\t" href
+					cover_found = 1
+					exit
+				}
+			}
+			
+			# Build href->id mapping for guide reference lookup
+			if (href != "") {
+				href_to_id[href] = id
+			}
+		}
+		
+		# 3. Search for <reference type="cover" href="..."> in guide section
+		if (guide_href == "" && line_lower ~ reference_pattern) {
+			h = extract_attr(line, "href")
+			if (h != "") {
+				guide_href = h
+			}
+		}
+	}
+	
+	END {
+		# Exit if cover was already found and printed
+		if (cover_found) exit
+		
+		# Priority 1: Candidate cover (id/href contains "cover")
+		if (candidate_href != "") {
+			print candidate_id "\t" candidate_href
+			exit
+		}
+		
+		# Priority 2: Guide reference href
+		if (guide_href != "") {
+			guide_id = href_to_id[guide_href]
+			# Print even if id is empty
+			if (guide_id == "") guide_id = ""
+			print guide_id "\t" guide_href
+			exit
+		}
+		
+		# Priority 3: First image as fallback
+		if (first_img_href != "") {
+			print first_img_id "\t" first_img_href
+			exit
+		}
+		
+		# No cover found
+		exit 1
+	}' "$cover_opf" || true)"
+
+if ! [[ "$(echo -e "$id_href" | tr '[:upper:]' '[:lower:]')" \
+		=~ \.(jpg|jpeg|png|gif|bmp|svg|webp)$ ]]; then
+	href="${id_href#*$'\t'}"
+	debug "$id_href"
+	id_href="$(find_cover_id_of_html "$cover_opf" "$href")"
+
+fi
+
+rm -f "$cover_opf"
+
+if [[ -n "$set_cover" ]]; then
+	new_id="cover-$(date +%s)"
+	new_ext="$(echo "${set_cover##*.}" | tr '[:upper:]' '[:lower:]')"
+	new_cover_path="$(dirname "$epub_opf")/$new_id.$new_ext"
+	new_type="$(get_media_type "cover.$new_ext")"
+	cp "$set_cover" "$new_cover_path"
+
+	item="<item href=\"$new_id.$new_ext\" id=\"$new_id\" "
+	item+="media-type=\"$new_type\"/>"
+	sed_i "s#<manifest[^>]*>#&$real_lf$indent$indent$item#" "$opf_footer"
+
+	change_cover_id "$new_id"
+
+	format_opf > "$epub_opf"
+	zip -q -Xr9D "$epub_file" "$new_cover_path" "$epub_opf"
+
+	log "New cover successfully set: $set_cover"
+fi
+
+id="${id_href%%$'\t'*}"
+href="${id_href#*$'\t'}"
+
+if [[ -z "$id" || -z "$href" ]]; then
+	error "$(basename "$1"): failed to find cover id"
+fi
+
+if [[ -n "$replace_cover" ]]; then
+	image_path="$(dirname "$epub_opf")/$href"
+	mkdir -p "$(dirname "$image_path")"
+	cp "$replace_cover" "$image_path"
+
+	change_cover_id "$id"
+
+	format_opf > "$epub_opf"
+	zip -q -Xr9D "$epub_file" "$epub_opf" "$image_path"
+
+	log "Cover image ($href) replaced with \"$replace_cover\""
+fi
+
+if [[ -n "$fix_cover" ]]; then
+	change_cover_id "$id"
+	format_opf > "$epub_opf"
+	zip -q -Xr9D "$epub_file" "$epub_opf"
+
+	log "New cover successfully set: $href [$id]"
+fi
+
+if [[ -n "$extract_cover" ]]; then
+	image_path="$(dirname "$epub_opf")/$href"
+	unzip -q "$epub_file" "$image_path"
+	new_ext="$(echo "${image_path##*.}" | tr '[:upper:]' '[:lower:]')"
+	cp -i "$image_path" "$extract_cover.$new_ext" \
+		&& log "Cover image ($href) copied to \"$extract_cover.$new_ext\""
 fi

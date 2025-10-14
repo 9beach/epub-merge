@@ -4,7 +4,8 @@ export DEBUG="${DEBUG:-}"
 export NO_TIME_TESTING="${NO_TIME_TESTING:-}"
 export LANG="ko_KR"
 
-trap 'echo "Error (test-epub-meta): at line $LINENO" >&2' ERR INT TERM
+trap 'printf "\033[31mError ($(basename "$0")): at line '\
+'$LINENO: $BASH_COMMAND\033[0m\n" >&2; cleanup' ERR INT TERM
 
 cleanup() {
 	[[ -n "$temp_dir" ]] && rm -fr "$temp_dir" || true
