@@ -433,9 +433,7 @@ validate_args "$@"
 
 readonly r_matching="(.*)(</dc:.*)"
 readonly sed_show_tags="
-/(<dc:title|<dc:publisher|<dc:subject|<dc:creator|<dc:description|<dc:rights\
-|<dc:language|<dc:date|<dc:contributor.*[\"']trl[\"']\
-|opf:scheme=[\"']ISBN[\"'])[^>]*>.*[^[:blank:]].*<\\/dc:/I {
+/<dc:[^>]*>.*[^[:blank:]].*<\\/dc:/I {
 s#(<dc:title[^>]*>)${r_matching}#01${label_title}: \\2#
 s#(<[^>]*opf:role=[\"']trl[\"'][^>]*>)${r_matching}#06${label_translator}: \\2#
 s#(<dc:subject[^>]*>)${r_matching}#08${label_subject}: \\2#
@@ -463,8 +461,9 @@ show_tags() {
 	# Parse OPF XML and output readable metadata (title, author, etc.)
 	# Supports Korean or English labels. Filters and cleans XML tags.
 	sed -nE "$sed_show_tags" ${1:+"$1"} \
+		| grep -v "<dc:" \
 		| sort -V \
-		| sed -E "s#</dc:.*##; s#^..##; s:^(.*) \[Unknown\]$:\1:" \
+		| sed -E "s#^..##; s:^(.*) \[Unknown\]$:\1:" \
 		| unescape_xml
 }
 
@@ -866,10 +865,10 @@ if [[ -n "$out_cover_path" ]]; then
 	image_path="$(echo "$image_path" \
 		| sed -E '
 		s#^\./##
+		s#/\./#/#
 		:a
 		s#/[^/]+/\.\./#/#g
-		ta
-		')"
+		ta')"
 	new_ext="$(echo "${image_path##*.}" | tr '[:upper:]' '[:lower:]')"
 
 	unzip -q "$epub_file" "$image_path"

@@ -39,10 +39,7 @@ temp_epub=""
 xml_formatter=""
 iconv_has_utf_8_mac="$(iconv -l | grep "UTF-8-MAC" || true)"
 readonly iconv_has_utf_8_mac
-
 readonly sp="[[:space:]]"
-readonly sed_remove_dot_path='s#(["/])\./#\1#g'
-readonly sed_remove_dotdot_path="s#/[^/][^/]*/\.\./#/#g"
 readonly uuid_pattern='[0-9a-fA-F]\{8\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}'\
 '-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{12\}'
 
@@ -141,6 +138,16 @@ error() {
 	exit 1
 }
 
+normalize_path() {
+	# './aa/./x/y/../../z' -> 'aa/z'
+	sed -E '
+	s#"\./#"#
+	s#/\./#/#
+	:a
+	s#/[^/]+/\.\./#/#g
+	ta' ${1:+"$1"}
+}
+
 # --- XML utility functions
 
 readonly xml_formatter_warning='The XML formatter is not installed, which "\
@@ -156,28 +163,21 @@ else
 fi
 
 readonly python3_xml_formatter="import xml.dom.minidom as x,sys; "\
-"print(x.parseString(open(sys.argv[1]).read()).toprettyxml(indent='  '))"
+"print(x.parseString(sys.stdin.read() if len(sys.argv)==1 "\
+"else open(sys.argv[1]).read()).toprettyxml(indent='  '))"
 
 if [[ "$xml_formatter" == "xmllint" ]]; then
 	format_xml() {
-		local file="$1"
-		local temp_xml="$temp_dir/.xml.XXXXX"
-		xmllint --recover --format --noblanks "$file" \
-			> "${temp_xml}" 2> /dev/null \
-			&& mv "${temp_xml}" "$file"
+		xmllint --recover --format --noblanks "${1:--}" 2> /dev/null
 	}
 elif [[ "$xml_formatter" == "python3" ]]; then
 	format_xml() {
-		local file="$1"
-		local temp_xml="$temp_dir/.xml.XXXXX"
-		python3 -c "$python3_xml_formatter" "$file" 2> /dev/null \
-			| grep -v "^ *$" \
-			> "${temp_xml}" \
-			&& mv "${temp_xml}" "$file"
+		python3 -c "$python3_xml_formatter" ${1:+"$1"} 2> /dev/null \
+			| grep -v "^ *$"
 	}
 else
 	format_xml() {
-		log "XML formatter not available"
+		cat ${1:+"$1"}
 	}
 fi
 
@@ -574,11 +574,13 @@ collect_file_paths_and_format_xml() {
 		cur_ncx="$(get_xml_attr "x-dtbncx" "href" "$cur_opf")"
 		opf_files[i]="$cur_opf"
 
-		format_xml "$cur_opf"
+		format_xml "$cur_opf" > .x && mv .x "$cur_opf"
 
 		# Get NCX
 		if [[ -f "$i/$opf_dir/$cur_ncx" ]]; then
-			format_xml "$i/$opf_dir/$cur_ncx"
+			format_xml "$i/$opf_dir/$cur_ncx" > .x \
+				&& mv .x "$i/$opf_dir/$cur_ncx"
+
 		else
 			cur_ncx=""
 		fi
@@ -600,7 +602,8 @@ collect_file_paths_and_format_xml() {
 		if [[ ! -f "$i/$opf_dir/$cur_nav" ]]; then
 			cur_nav=""
 		else
-			format_xml "$i/$opf_dir/$cur_nav"
+			format_xml "$i/$opf_dir/$cur_nav" > .x \
+				&& mv .x "$i/$opf_dir/$cur_nav"
 		fi
 
 		if [[ -z "$first_nav_id" && -n "$cur_nav" ]]; then
@@ -735,16 +738,11 @@ merge_ncxs() {
 		extract_and_modify_xml navMap "" "$cur_ncx_dir" "$i" "$cur_ncx"
 
 		echo "</navPoint>"
-	done \
-	| fix_playorder \
-	| sed -E "
-	$sed_remove_dot_path
-	$sed_remove_dotdot_path" \
-	>> "$toc_file"
+	done | fix_playorder | normalize_path >> "$toc_file"
 
 	echo -e "</navMap>\n</ncx>" >> "$toc_file"
 
-	format_xml "$toc_file"
+	format_xml "$toc_file" > .x && mv .x "$toc_file"
 }
 
 merge_navs() {
@@ -798,11 +796,8 @@ merge_navs() {
 
 	# Close NAV structure
 	echo -e '</ol></nav>\n</body>\n</html>' >> "$nav_file"
-	sed_i -E "
-	$sed_remove_dot_path
-	$sed_remove_dotdot_path
-	" "$nav_file" "$nav_file"
-	format_xml "$nav_file"
+
+	normalize_path "$nav_file" | format_xml > .x && mv .x "$nav_file"
 }
 
 merge_opfs() {
@@ -866,17 +861,15 @@ merge_opfs() {
 	| sed -E "
 	s:\"0/[^\"']*\.ncx\":\"$merged_ncx\":
 	s:\"${first_ncx_id}-0\":\"$merged_ncx_id\":
-	s:\"${first_ncx_id}\":\"$merged_ncx_id\":
-	$sed_remove_dotdot_path
-	$sed_remove_dot_path
-	" \
+	s:\"${first_ncx_id}\":\"$merged_ncx_id\":" \
+	| normalize_path  \
 	| fix_font_paths \
 	| filter_dups \
 	| grep -ivE '[0-9][0-9]*/.*\.(ncx|otf|ttf|woff|woff2|eot)' \
 	>> "content.opf"
 
 	to_nfc content.opf
-	format_xml content.opf
+	format_xml content.opf > .x && mv .x content.opf
 
 	rm -f "$manifest_file" "$spine_file"
 }
@@ -913,38 +906,39 @@ backup_originals() {
 		cur_ncx_id="${cur_ncx_id:-$no_ncx}"
 
 		# OPF
-		format_xml "$cur_opf"
-		sed -E "
-		s:<(item|reference).*href=[\"']:&$new_opf_dir/:g
-		s:(<(item|reference).*href=.*)(//):\1/:
-		$sed_remove_dot_path
-		s:href=\"[^\"]*\.ncx\":href=\"toc.ncx\":
-		s:href=\"[^\"]*$(basename "$cur_nav")\":href=\"$nav\":
-		s:[\"']${cur_ncx_id}[\"']:\"ncx\":" "$cur_opf" \
-		| fix_font_paths \
-		> ".epub-merge/$i.opf"
+		format_xml "$cur_opf" \
+			| sed -E "
+			s:<(item|reference).*href=[\"']:&$new_opf_dir/:g
+			s:(<(item|reference).*href=.*)(//):\1/:
+			s:href=\"[^\"]*\.ncx\":href=\"toc.ncx\":
+			s:href=\"[^\"]*$(basename "$cur_nav")\":href=\"$nav\":
+			s:[\"']${cur_ncx_id}[\"']:\"ncx\":" \
+			| normalize_path \
+			| fix_font_paths \
+			> ".epub-merge/$i.opf"
 
 		# NCX
 		if [[ "$cur_ncx" != "$no_ncx" ]]; then
-			format_xml "$cur_ncx"
-			sed -E "
-			s:src=\":&$new_ncx_dir/:g
-			s:(src=.*)(//):\1/:
-			s:src=\"[^\"]*$(basename "$cur_nav")\":href=\"$nav\":
-			$sed_remove_dot_path" "$cur_ncx" \
-			> ".epub-merge/$i.ncx"
+			format_xml "$cur_ncx" \
+				| sed -E "
+				s:src=\":&$new_ncx_dir/:g
+				s:(src=.*)(//):\1/:
+				s:src=\"[^\"]*$(basename \
+					"$cur_nav")\":href=\"$nav\":" \
+				| normalize_path \
+				> ".epub-merge/$i.ncx"
 		fi
 
 		# NAV
 		if [[ "$cur_nav" != "$no_nav" ]]; then
-			format_xml "$cur_nav"
-			sed -E "
-			s:(href=\")([^#]):\1$new_nav_dir/\2:g
-			s:(href=.*)(//):\1/:
-			s:href=\"[^\"]*$(basename "$cur_nav")\":href=\"$nav\":
-			$sed_remove_dot_path
-			$sed_remove_dotdot_path" "$cur_nav" \
-			> ".epub-merge/$i.nav"
+			format_xml "$cur_nav" \
+				| sed -E "
+				s:(href=\")([^#]):\1$new_nav_dir/\2:g
+				s:(href=.*)(//):\1/:
+				s:href=\"[^\"]*$(basename \
+					"$cur_nav")\":href=\"$nav\":" \
+				| normalize_path \
+				> ".epub-merge/$i.nav"
 		fi
 
 		# Filename
