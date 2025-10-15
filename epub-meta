@@ -2,6 +2,7 @@
 
 set -euo pipefail
 
+readonly EPUB_META_LABEL_LANG=${EPUB_META_LABEL_LANG:-$LANG}
 readonly DEBUG=${DEBUG:-}  # Debug output toggle.
 
 quiet_mode=""              # Suppress non-critical logs.
@@ -44,10 +45,7 @@ new_modified=""
 
 # --- Label translations
 
-lang_is_kr="$(defaults read -g AppleLanguages 2> /dev/null \
-	| grep 'ko-' || true)" # Just my preference
-
-if [[ "${LANG:-ko_KR}" == ko* || -n "$lang_is_kr" ]]; then
+if [[ "$EPUB_META_LABEL_LANG" == ko* ]]; then
 	readonly label_title="제목"
 	readonly label_author="작가"
 	readonly label_translator="번역"
@@ -470,9 +468,9 @@ show_tags() {
 		| unescape_xml
 }
 
+# No edit option, then show tags and exit.
 if [[ -z "$edit_mode" && -z "$fix_cover_given" && -z "$out_cover_path" \
 		&& -z "$new_cover_path" && -z "$alt_cover_path" ]]; then
-	# No edit option, then read metadata and exit.
 	if [[ -z "$opf_file" ]]; then
 		unzip -p "$epub_file" "$epub_opf"
 	else
