@@ -862,7 +862,14 @@ fi
 
 if [[ -n "$out_cover_path" ]]; then
 	image_path="$(dirname "$epub_opf")/$href"
-	image_path="$(echo "$image_path" | sed 's#^\./##')"
+	# './aa/x/y/../../z' -> 'aa/z'
+	image_path="$(echo "$image_path" \
+		| sed -E '
+		s#^\./##
+		:a
+		s#/[^/]+/\.\./#/#g
+		ta
+		')"
 	new_ext="$(echo "${image_path##*.}" | tr '[:upper:]' '[:lower:]')"
 
 	unzip -q "$epub_file" "$image_path"
