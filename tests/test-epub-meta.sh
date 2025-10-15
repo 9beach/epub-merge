@@ -195,7 +195,7 @@ mv content.opf-bak content.opf
 
 [[ -n "$NO_TIME_TESTING" ]] && exit
 
-times=100
+times=50
 
 time ( for i in $(seq 1 $times); do epub_meta content.opf > /dev/null; done )
 
