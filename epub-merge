@@ -355,8 +355,9 @@ get_prefix() {
 to_nfc() {
 	# Convert to NFC encoding
 	if [ -n "$iconv_has_utf_8_mac" ]; then
-		iconv -f UTF-8-MAC -t UTF-8 "$1" > "$1.nfc" 2> /dev/null \
-			&& mv "$1.nfc" "$1"
+		iconv -f UTF-8-MAC -t UTF-8 ${1:+"$1"}
+	else
+		cat ${1:+"$1"}
 	fi
 }
 
@@ -868,8 +869,7 @@ merge_opfs() {
 	| grep -ivE '[0-9][0-9]*/.*\.(ncx|otf|ttf|woff|woff2|eot)' \
 	>> "content.opf"
 
-	to_nfc content.opf
-	format_xml content.opf > .x && mv .x content.opf
+	to_nfc content.opf | format_xml > .x && mv .x content.opf
 
 	rm -f "$manifest_file" "$spine_file"
 }
@@ -942,8 +942,7 @@ backup_originals() {
 		fi
 
 		# Filename
-		basename "${epub_files[i]}" > ".epub-merge/$i.name"
-		to_nfc ".epub-merge/$i.name"
+		basename "${epub_files[i]}" | to_nfc > ".epub-merge/$i.name"
 	done
 }
 

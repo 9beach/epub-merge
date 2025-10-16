@@ -147,10 +147,10 @@ error() {
 }
 
 check_file_type() {
-	# Quickly checks file type (XML or ZIP) by examining the first few 
+	# Quickly checks file type (XML or ZIP) by examining the first few
 	# bytes.
 	local file="$1" header_bytes
-	readonly zip_magic=$'PK\x03\x04' 
+	readonly zip_magic=$'PK\x03\x04'
 	readonly xml_start='<?xml'
 	header_bytes=$(head -c 4 "$1")
 
@@ -224,7 +224,7 @@ validate_args() {
 	if [[ -z "$epub_file" ]]; then
 		if [[ -n "$fix_cover_given" || -n "$new_cover_path" \
 			|| -n "$out_cover_path" || -n "$alt_cover_path" ]]; then
-		error 'cover-related options cannot be used with OPF file'
+			error 'cover-related options cannot be used with OPF'
 		fi
 	fi
 
@@ -279,7 +279,7 @@ split_real_lf() {
 }
 
 split_xml_elements() {
-	# Convert self-closing <dc:*> tags to open-close, and place each 
+	# Convert self-closing <dc:*> tags to open-close, and place each
 	# element (open/close) on its own line.
 	tr -d '\r' | tr '\n' $real_lf | sed -E "$sed_split_xml_elements"
 }
@@ -301,7 +301,7 @@ readonly sed_split_xml_elements
 # --- Metadata edit
 
 echo_multi_tags() {
-	# Create multi tags from 'display_name--sort_name' format and 
+	# Create multi tags from 'display_name--sort_name' format and
 	# multi-entry (// separated).
 	local new_content="$1"
 	local tags=""
@@ -350,34 +350,36 @@ echo_new_tags() {
 	fi
 }
 
+to_nfc() {
+	# Convert to NFC encoding
+	if [ -n "$iconv_has_utf_8_mac" ]; then
+		iconv -f UTF-8-MAC -t UTF-8 ${1:+"$1"}
+	else
+		cat ${1:+"$1"}
+	fi
+}
+
 format_opf() {
 	# Rebuild the final OPF file:
 	#   - combine modified header and untouched footer,
 	#   - normalize line breaks,
 	#   - strip blank lines.
-	{
-		if [[ -n "$iconv_has_utf_8_mac" ]]; then
-			iconv -f UTF-8-MAC -t UTF-8 "$new_opf_header"
-		else
-			cat "$new_opf_header"
-		fi
-		cat "$opf_footer"
-	} \
-	| tr -d '\n' \
-	| split_real_lf \
-	| tr '\r' '\n' \
-	| grep -Ev '^[[:blank:]]+$'
+	cat "$new_opf_header" "$opf_footer" \
+		| tr -d '\n' \
+		| split_real_lf \
+		| tr '\r' '\n' \
+		| grep -Ev '^[[:blank:]]+$'
 }
 
 build_element_filters() {
-	# Build filters for colorizing modified attributes and removing 
+	# Build filters for colorizing modified attributes and removing
 	# old values
 	local element="$1" content="new_${4:-$1}"
 	local new_content="${!content}" label="label_${4:-$1}"
 	local attr="${2:-}" value="${3:-}" value_esc
 
 	if [[ -n "$new_content" ]]; then
-		# Build regex pattern for matching dc:* element with 
+		# Build regex pattern for matching dc:* element with
 		# optional attribute
 		local attr_pattern=""
 		if [[ -n "$attr" && -n "$value" ]]; then
@@ -392,7 +394,7 @@ build_element_filters() {
 }
 
 build_all_filters() {
-	# These are used to remove specific XML elements and format output 
+	# These are used to remove specific XML elements and format output
 	# messages.
 	#
 	# Example removing_filter: "<dc:publisher[^>]*>|<dc:subject[^>]*>"
@@ -477,7 +479,6 @@ if [[ -z "$edit_mode" && -z "$fix_cover_given" && -z "$out_cover_path" \
 	fi \
 	| split_xml_elements | show_tags | split_real_lf
 
-	debug "exit after first show_tags"
 	exit 0
 fi
 
@@ -513,28 +514,27 @@ sed -E 's#^.*[^[:blank:]]([[:blank:]]*</metadata>.*)#\1#' "$epub_opf" \
 	> "$opf_footer"
 
 if [[ -n "$edit_mode" ]]; then
-	{
-		# Remove elements to be replaced
-		grep -E -v "$removing_filter" "$opf_header" || true
+	# Remove elements to be replaced
+	grep -E -v "$removing_filter" "$opf_header" || true
 
-		# Print new elements
+	# Print new elements
+	{
 		echo_new_tags title
-		SUPPORT_MULTI_VALUES=1 echo_new_tags \
-			creator opf:role aut author 
-		SUPPORT_MULTI_VALUES=1 echo_new_tags \
-			creator opf:role trl translator 
+		SUPPORT_MULTI_VALUES=1 echo_new_tags creator opf:role aut author
+		SUPPORT_MULTI_VALUES=1 echo_new_tags creator \
+			opf:role trl translator
 		SUPPORT_MULTI_VALUES=1 echo_new_tags subject subject
 		echo_new_tags publisher
-		echo_new_tags date opf:event publication published 
-		echo_new_tags date opf:event modification modified 
+		echo_new_tags date opf:event publication published
+		echo_new_tags date opf:event modification modified
 		echo_new_tags rights
-		echo_new_tags identifier opf:scheme ISBN isbn 
+		echo_new_tags identifier opf:scheme ISBN isbn
 		echo_new_tags description
 		echo_new_tags language
-	} > "$new_opf_header"
+	} | to_nfc
 else
-	cp "$opf_header" "$new_opf_header"
-fi
+	cat "$opf_header"
+fi > "$new_opf_header"
 
 if [[ -z "$quiet_mode" && -n "$edit_mode" ]]; then
 	show_tags "$new_opf_header" \
@@ -551,7 +551,6 @@ fi
 
 if [[ -z "$fix_cover_given" && -z "$out_cover_path" && -z "$new_cover_path" \
 		&& -z "$alt_cover_path" ]]; then
-	debug "exit after second show_tags"
 	exit
 fi
 
@@ -589,7 +588,6 @@ change_cover_id() {
 	local echo_cover_meta="${indent}${indent}<meta content=\"$id\" "
 	echo_cover_meta+="name=\"cover\"/>${real_lf}"
 
-	debug "change cover id"
 	if [[ -n "$cover_meta_found" ]]; then
 		sed_i "$sed_cover_meta_replace" "$new_opf_header"
 	else
@@ -600,7 +598,6 @@ change_cover_id() {
 	local sed_cover_properties_add="s#<item.*id=[\"']$id[\"']#& "
 	sed_cover_properties_add+="properties=\"cover-image\"#"
 	if [[ "$epub_version" != "2.0" ]]; then
-		debug "set ePUB3 cover-image properties: $id"
 		sed -E -e 's/properties="cover-image"//g' \
 			-e "$sed_cover_properties_add" "$opf_footer" \
 			> "$opf_footer".new \
@@ -824,8 +821,9 @@ id_href="$(awk '
 if ! [[ "$(echo -e "$id_href" | tr '[:upper:]' '[:lower:]')" \
 		=~ \.(jpg|jpeg|png|gif|bmp|svg|webp)$ ]]; then
 	href="${id_href#*$'\t'}"
-	debug "$id_href"
+	debug_var id_href
 	id_href="$(find_cover_id_of_html "$cover_opf" "$href")"
+	debug_var id_href
 
 fi
 
