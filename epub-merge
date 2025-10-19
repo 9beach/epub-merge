@@ -1123,7 +1123,7 @@ extract_merged_epub() {
 	# Extract merged ePUB and split into original files
 	debug_func "$@"
 	if ! validate_epub "$1" 1; then
-		error "Program exits in extract_merged_epub"
+		error "Program exits"
 	fi
 
 	# `mktemp` should be done before extracting args
