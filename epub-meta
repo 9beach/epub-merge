@@ -8,6 +8,7 @@ readonly DEBUG=${DEBUG:-}  # Debug output toggle.
 quiet_mode=""              # Suppress non-critical logs.
 edit_mode=""               # If not set, show metadata; if set, modify.
 fix_cover_given=""         # Fix cover if set
+single_line_given=""       # Display each attribute value in a single line
 new_cover_path=""          # Set new cover if set
 alt_cover_path=""          # Replace existing cover if set
 out_cover_path=""          # Extract cover if set
@@ -105,6 +106,8 @@ Options:
   -u DATE        Set publication date (e.g., "2016-07-31")
   -x RIGHTS      Set rights/copyright info
   -h             Show this help message
+  -1             Display each attribute value in a single line
+                 (replace newlines with \n)
 
 Notes:
   - Use empty string ("") to remove a metadata field.
@@ -171,7 +174,7 @@ check_file_type() {
 }
 
 parse_args() {
-	while getopts "t:a:r:p:s:l:d:i:x:c:C:S:u:m:qhf" opt; do
+	while getopts "t:a:r:p:s:l:d:i:x:c:C:S:u:m:1qhf" opt; do
 		# shellcheck disable=SC2034
 		case $opt in
 			t) new_title="${OPTARG:-$removing}"; edit_mode=1 ;;
@@ -192,6 +195,7 @@ parse_args() {
 			x) new_rights="${OPTARG:-$removing}"; edit_mode=1 ;;
 			u) new_published="${OPTARG:-$removing}"; edit_mode=1 ;;
 			m) new_modified="${OPTARG:-$removing}"; edit_mode=1 ;;
+			1) single_line_given=1 ;;
 			h) show_usage ;;
 			\?) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
 			:) echo "Option -$OPTARG requires an argument." >&2
@@ -477,7 +481,13 @@ if [[ -z "$edit_mode" && -z "$fix_cover_given" && -z "$out_cover_path" \
 	else
 		cat "$opf_file"
 	fi \
-	| split_xml_elements | show_tags | split_real_lf
+	| split_xml_elements | show_tags \
+	| \
+	if [[ "$single_line_given" -eq 1 ]]; then
+		sed "s#$real_lf#\\\\n#g"
+	else
+		tr $real_lf '\n'
+	fi
 
 	exit 0
 fi
