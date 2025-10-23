@@ -309,6 +309,9 @@ DESCRIPTION
              Set the rights or copyright information. Use an empty string ("")
              to remove rights information.
 
+     -1      Display each attribute value in a single line (replace newlines 
+             with \n)
+
 EXAMPLES
      Display current metadata:
 
