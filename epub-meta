@@ -145,7 +145,7 @@ debug_var() {
 
 error() {
 	# Print red error message and exit.
-	printf "\033[31mError (epub-merge): %s\033[0m\n" "$*" >&2
+	printf "\033[31mError (epub-meta): %s\033[0m\n" "$*" >&2
 	exit 1
 }
 
