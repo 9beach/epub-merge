@@ -629,7 +629,7 @@ get_valume_labels() {
 	# Set defaults based on language
 	if [[ -z "$prefix" ]]; then
 		case "$epub_lang" in
-			ko) prefix='제 ' ;;
+			ko) prefix='제' ;;
 			zh) prefix='第' ;;
 			ja) prefix='第' ;;
 			es) prefix='Volumen ' ;;
