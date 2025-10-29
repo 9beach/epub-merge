@@ -862,6 +862,14 @@ fi
 if [[ -n "$fix_cover_given" ]]; then
 	change_cover_id "$id"
 	format_opf > "$epub_opf"
+
+	# Fix incorrect cover path case (i.e., Cover.jpg -> cover.jpg)
+        new_href="$(unzip -l "$epub_file" | grep -iom1 "$href")" || true
+        if [[ -n "$new_href" && "$new_href" != "$href" ]]; then
+                sed_i "s#$href#$new_href#" "$epub_opf"
+                href="$new_href"
+        fi
+
 	zip -q -Xr9D "$epub_file" "$epub_opf"
 
 	log "Successfully set internal image as cover: $href [$id]"
