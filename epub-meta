@@ -59,7 +59,6 @@ if [[ "$EPUB_META_LABEL_LANG" == ko* ]]; then
 	readonly label_created="작성일"
 	readonly label_rights="권리"
 	readonly label_isbn="도서번호"
-	readonly label_cover="커버"
 else
 	readonly label_title="Title"
 	readonly label_author="Author"
@@ -73,7 +72,6 @@ else
 	readonly label_created="Created"
 	readonly label_rights="Rights"
 	readonly label_isbn="ISBN"
-	readonly label_cover="Cover"
 fi
 
 # --- Utility functions
