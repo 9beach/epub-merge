@@ -368,12 +368,12 @@ validate_epub() {
 	local epub_file="$1" is_merged="${2:-}"
 	temp_file="$(mktemp)"
 
-	if ! unzip -l "$epub_file" > "$temp_file"; then
+	if ! unzip -Z1 "$epub_file" > "$temp_file"; then
 		log "Invalid ZIP file '$epub_file'"
 		return 1
 	fi
 
-	if ! grep -qEi "(mimetype|META-INF/container.xml|\.opf)$" \
+	if ! grep -qEi "(^mimetype|^META-INF/container.xml|\.opf)$" \
 			"$temp_file"; then
 		log "Missing required file '$pattern' in '$epub_file'"
 		return 1
@@ -381,9 +381,9 @@ validate_epub() {
 
 	if [[ "$is_merged" == 1 ]]; then
 		local merged_opf_count opf_backup_count
-		merged_opf_count="$(grep -c " content.opf" "$temp_file"|| true)"
-		opf_backup_count="$(grep -cE "merge/[0-9]+.opf$" "$temp_file" \
-			|| true)"
+		merged_opf_count="$(grep -c "^content.opf" "$temp_file"|| true)"
+		opf_backup_count="$(grep -cE "^\.epub-merge/[0-9]+.opf$" \
+			"$temp_file" || true)"
 
 		if [[ "$merged_opf_count" -ne 1 \
 			|| "$opf_backup_count" -lt 2 \
