@@ -408,6 +408,7 @@ build_all_filters() {
 	build_element_filters creator opf:role aut author
 	build_element_filters creator opf:role trl translator
 	build_element_filters translator opf:role trl translator
+	build_element_filters contributor opf:role trl translator
 	build_element_filters publisher
 	build_element_filters subject
 	build_element_filters language
