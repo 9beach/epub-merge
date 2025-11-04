@@ -152,7 +152,9 @@ check_file_type() {
 	# bytes.
 	local file="$1" header_bytes
 	readonly zip_magic=$'PK\x03\x04'
+	readonly utf8_bom=$'\xEF\xBB\xBF'
 	readonly xml_start='<?xml'
+	readonly opf_start='<pack'
 	header_bytes=$(head -c 4 "$1")
 
 	if [[ "$header_bytes" == "$zip_magic" ]]; then
@@ -161,8 +163,10 @@ check_file_type() {
 		return 0
 	fi
 
-	header_bytes=$(head -c 10 "$file")
-	if [[ "$header_bytes" == "$xml_start"* ]]; then
+	header_bytes=$(head -c 13 "$file")
+	header_bytes="${header_bytes#$utf8_bom}"
+	if [[ "$header_bytes" == "$xml_start"* \
+			|| "$header_bytes" == "$opf_start"* ]]; then
 		opf_file="$(realpath "$1")"
 		readonly opf_file
 		return 0
