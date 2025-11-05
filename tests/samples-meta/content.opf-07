@@ -5,7 +5,7 @@
     <meta content="cover.jpg" name="cover"/>
     <meta content="TestEbooks" name="TestEpubSource"/>
     <dc:title>뱀과물 (Snake And Water)</dc:title>
-    <dc:creator opf:role="trl">Deborah Smith</dc:creator>
+    <dc:creator opf:role="trl" xmlns:opf="http://www.idpf.org/2007/opf">Deborah Smith</dc:creator>
     <dc:description><![CDATA[
 <p>A dystopian novel about totalitarianism.</p>
 <p>Published in 1949.</p>
@@ -15,18 +15,18 @@
     <dc:subject>꿈</dc:subject>
     <dc:subject>몽환</dc:subject>
     <dc:publisher>문학동네</dc:publisher>
-    <dc:date opf:event="publication">2024-05-01</dc:date>
-    <dc:date opf:event="modification">2024-06-05</dc:date>
+    <dc:date opf:event="publication" xmlns:opf="http://www.idpf.org/2007/opf">2024-05-01</dc:date>
+    <dc:date opf:event="modification" xmlns:opf="http://www.idpf.org/2007/opf">2024-06-05</dc:date>
     <dc:rights>권리를 존중해주세요</dc:rights>
     <dc:language>en</dc:language>
-    <dc:creator opf:role="aut">Bad
+    <dc:creator opf:role="aut" xmlns:opf="http://www.idpf.org/2007/opf">Bad
 
 Author
 </dc:creator>
-    <dc:creator opf:role="aut" opf:file-as="But has
+    <dc:creator opf:role="aut" xmlns:opf="http://www.idpf.org/2007/opf" opf:file-as="But has
 Lovely Name">Really Really
 Bad Author</dc:creator>
-    <dc:identifier opf:scheme="ISBN">BAD
+    <dc:identifier opf:scheme="ISBN" xmlns:opf="http://www.idpf.org/2007/opf">BAD
 ISBN XXXXX</dc:identifier>
   </metadata>
   <manifest>

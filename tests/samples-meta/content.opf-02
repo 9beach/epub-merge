@@ -8,9 +8,9 @@
     <meta content="cover.jpg" name="cover"/>
     <meta content="TestEbooks" name="TestEpubSource"/>
     <dc:title>뱀과물 (Snake And Water)</dc:title>
-    <dc:creator opf:role="aut" opf:file-as="배, 수아">배수아</dc:creator>
-    <dc:creator opf:role="aut" opf:file-as="Bae, Suah">Suah Bae</dc:creator>
-    <dc:creator opf:role="trl">Deborah Smith</dc:creator>
+    <dc:creator opf:role="aut" xmlns:opf="http://www.idpf.org/2007/opf" opf:file-as="배, 수아">배수아</dc:creator>
+    <dc:creator opf:role="aut" xmlns:opf="http://www.idpf.org/2007/opf" opf:file-as="Bae, Suah">Suah Bae</dc:creator>
+    <dc:creator opf:role="trl" xmlns:opf="http://www.idpf.org/2007/opf">Deborah Smith</dc:creator>
   </metadata>
   <manifest>
     <item href="toc.ncx" id="ncx" media-type="application/x-dtbncx+xml"/>

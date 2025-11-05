@@ -343,8 +343,13 @@ echo_new_tags() {
 		return 0
 	fi
 
-	[[ -n "$attr" && -n "$value" ]] && attr_string=" ${attr}=\"${value}\""
-	[[ "$new_content" == "$removing" ]] && return
+	if [[ -n "$attr" && -n "$value" ]]; then
+		attr_string=" ${attr}=\"${value}\""
+		attr_string+=" xmlns:opf=\"http://www.idpf.org/2007/opf\""
+	fi
+	if [[ "$new_content" == "$removing" ]]; then
+		return
+	fi
 
 	new_content="$(escape_xml "$new_content")"
 	if [[ -n "${SUPPORT_MULTI_VALUES:-}" ]]; then

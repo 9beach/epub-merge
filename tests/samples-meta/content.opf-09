@@ -13,15 +13,15 @@
     <dc:subject>꿈</dc:subject>
     <dc:subject>몽환</dc:subject>
     <dc:publisher>문학동네</dc:publisher>
-    <dc:date opf:event="publication">2024-05-01</dc:date>
-    <dc:date opf:event="modification">2024-06-05</dc:date>
+    <dc:date opf:event="publication" xmlns:opf="http://www.idpf.org/2007/opf">2024-05-01</dc:date>
+    <dc:date opf:event="modification" xmlns:opf="http://www.idpf.org/2007/opf">2024-06-05</dc:date>
     <dc:rights>권리를 존중해주세요</dc:rights>
     <dc:language>en</dc:language>
-    <dc:creator opf:role="trl">Deborah Smith</dc:creator>
-    <dc:identifier opf:scheme="ISBN">ISBN 978-89-9470-250-6 13191</dc:identifier>
+    <dc:creator opf:role="trl" xmlns:opf="http://www.idpf.org/2007/opf">Deborah Smith</dc:creator>
+    <dc:identifier opf:scheme="ISBN" xmlns:opf="http://www.idpf.org/2007/opf">ISBN 978-89-9470-250-6 13191</dc:identifier>
     <dc:title>&lt;&amp;&gt;&quot;&apos;#//&lt;&amp;&gt;&quot;#</dc:title>
-    <dc:creator opf:role="aut">&lt;&amp;&gt;&quot;&apos;#</dc:creator>
-    <dc:creator opf:role="aut">&lt;&amp;&gt;&quot;#</dc:creator>
+    <dc:creator opf:role="aut" xmlns:opf="http://www.idpf.org/2007/opf">&lt;&amp;&gt;&quot;&apos;#</dc:creator>
+    <dc:creator opf:role="aut" xmlns:opf="http://www.idpf.org/2007/opf">&lt;&amp;&gt;&quot;#</dc:creator>
   </metadata>
   <manifest>
     <item href="toc.ncx" id="ncx" media-type="application/x-dtbncx+xml"/>
