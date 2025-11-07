@@ -8,6 +8,7 @@ readonly DEBUG=${DEBUG:-}  # Debug output toggle.
 quiet_mode=""              # Suppress non-critical logs.
 edit_mode=""               # If not set, show metadata; if set, modify.
 fix_cover_given=""         # Fix cover if set
+do_not_sort_given=""       # Do not sort attributes when displaying
 single_line_given=""       # Display each attribute value in a single line
 new_cover_path=""          # Set new cover if set
 alt_cover_path=""          # Replace existing cover if set
@@ -95,6 +96,7 @@ Options:
   -i ISBN        Set ISBN
   -l LANG        Set language (e.g., en, ko)
   -m DATE        Set modification date
+  -O             Do not sort attributes when displaying metadata
   -p PUBLISHER   Set publisher
   -q             Quiet mode (suppress progress messages)
   -r TRANSLATOR  Set translator(s) (same format as -a)
@@ -176,7 +178,7 @@ check_file_type() {
 }
 
 parse_args() {
-	while getopts "t:a:r:p:s:l:d:i:x:c:C:S:u:m:1qhf" opt; do
+	while getopts "t:a:r:p:s:l:d:i:x:c:C:S:u:m:1qhfO" opt; do
 		# shellcheck disable=SC2034
 		case $opt in
 			t) new_title="${OPTARG:-$removing}"; edit_mode=1 ;;
@@ -184,6 +186,7 @@ parse_args() {
 			c) new_cover_path="$(realpath "${OPTARG}")" ;;
 			C) alt_cover_path="$(realpath "${OPTARG}")" ;;
 			f) fix_cover_given=1 ;;
+			O) do_not_sort_given=1 ;;
 			S) out_cover_path="$(realpath "$(dirname \
 				"${OPTARG}")")/$(basename "${OPTARG}")" ;;
 			q) quiet_mode=1 ;;
@@ -474,11 +477,18 @@ p
 show_tags() {
 	# Parse OPF XML and output readable metadata (title, author, etc.)
 	# Supports Korean or English labels. Filters and cleans XML tags.
-	sed -nE "$sed_show_tags" ${1:+"$1"} \
-		| grep -v "<dc:" \
-		| sort -V \
-		| sed -E "s#^..##; s:^(.*) \[Unknown\]$:\1:" \
-		| unescape_xml
+	if [[ "$do_not_sort_given" -eq 1 ]]; then
+		sed -nE "$sed_show_tags" ${1:+"$1"} \
+			| grep -v "<dc:" \
+			| sed -E "s#^..##; s:^(.*) \[Unknown\]$:\1:" \
+			| unescape_xml
+	else
+		sed -nE "$sed_show_tags" ${1:+"$1"} \
+			| grep -v "<dc:" \
+			| sort -V \
+			| sed -E "s#^..##; s:^(.*) \[Unknown\]$:\1:" \
+			| unescape_xml
+	fi
 }
 
 # No edit option, then show tags and exit.

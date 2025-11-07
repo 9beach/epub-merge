@@ -277,6 +277,8 @@ DESCRIPTION
      -m date
              Set the modification date.
 
+     -O      Do not sort attributes when displaying metadata.
+
      -p publisher
              Set the publisher name. Use an empty string ("") to remove the
              publisher.
