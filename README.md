@@ -160,7 +160,7 @@ NAME
      epub-merge -- merge multiple ePUB files into one or extract merged ePUB
 
 SYNOPSIS
-     epub-merge [-fOq] [-d directory] [-l lang] [-p prefix] [-s suffix]
+     epub-merge [-fOqV] [-d directory] [-l lang] [-p prefix] [-s suffix]
                 [-t title] [-v labels] file ...
      epub-merge -x file
 
@@ -197,6 +197,8 @@ DESCRIPTION
              Labels must be separated by semicolons, for example:
              "Love//Peace//Hate".
 
+     -V      Get custom volume labels from filenames.
+
      -x      Extraction mode. Split a merged ePUB back into its original
              component files.
 
@@ -231,7 +233,7 @@ NAME
      epub-meta -- read and edit metadata in an ePUB or OPF file
 
 SYNOPSIS
-     epub-meta [-fq] [-a author] [-c file] [-C file] [-d description]
+     epub-meta [-fOq] [-a author] [-c file] [-C file] [-d description]
                [-i isbn] [-l lang] [-m date] [-p publisher] [-r translator]
                [-s subject] [-S path] [-t title] [-u date] [-x rights]
                {epub-file | opf-file}
