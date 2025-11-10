@@ -25,6 +25,7 @@ overwrite_existing=""
 toc_volume_prefix=""
 toc_volume_suffix=""
 toc_volume_given=""
+filename_label_given=""
 toc_volume_labels=()
 epub_name="" 
 epub_title=""
@@ -50,7 +51,7 @@ show_usage() {
 epub-merge -- merge multiple ePUB files into one or extract merged ePUB
 
 Usage:
-  epub-merge [-fOq] [-d directory] [-l lang] [-p prefix] [-s suffix]
+  epub-merge [-fOqV] [-d directory] [-l lang] [-p prefix] [-s suffix]
              [-t title] [-v labels] file ...
   epub-merge -x file
 
@@ -64,6 +65,7 @@ Options:
   -s suffix      Add suffix to table of contents volume labels.
   -t title       Set custom title and output filename.
   -v labels      Set custom volume labels (e.g., "Love//Peace//Hate").
+  -V             Get custom volume labels from filenames.
   -x             Extract merged ePUB into original files.
   -h             Show this help message.
 
@@ -435,7 +437,7 @@ fix_font_paths() {
 # --- Command line parsing and validation
 
 parse_args() {
-	while getopts "n:t:l:p:v:s:d:fOqx" opt; do
+	while getopts "n:t:l:p:v:s:d:fOqVx" opt; do
 		case "$opt" in
 			f) overwrite_existing=1 ;;
 			d) output_dir="$(realpath "$OPTARG")" ;;
@@ -447,6 +449,7 @@ parse_args() {
 				l="${l%"${l##*[![:space:]]}"}"
 				toc_volume_labels+=("$l")
 			   done <<< "$label_lines" ;;
+			V) filename_label_given=1 ;;
 			t) epub_title="$OPTARG" ;;
 			l) epub_lang="$OPTARG" ;;
 			p) toc_volume_prefix="$OPTARG"
@@ -478,6 +481,11 @@ validate_args() {
 	for file in "$@"; do
 		[[ -f "$file" ]] || error "File not found '$file'"
 	done
+
+	if [[ ${#toc_volume_labels[@]} -ne 0 \
+			&& "$filename_label_given" -eq 1 ]]; then
+		error "The -V and -v options cannot be used together"
+	fi
 }
 
 gen_output_names() {
@@ -489,7 +497,7 @@ gen_output_names() {
 	fi
 
 	if [[ -z "$epub_name" ]]; then
-		error "Cannot determine output name from '$1' and '$2'."
+		error "Cannot determine output name from '$1' and '$2'"
 	fi
 
 	epub_title="${epub_title:-$epub_name}"
@@ -1206,9 +1214,21 @@ main() {
 	# Determine output filename and epub title
 	gen_output_names "$1" "$2"
 
-	# Validate all ePUB files
+	# Validate all ePUB files, check if output file name conflicts
+	# with an input file, and more.
 	for epub in "$@"; do
 		validate_epub "$epub" 0
+
+		if [[ "$(realpath "$epub" | tr '[A-Z]' '[a-z]')" \
+			== "$(echo "$output_dir/$epub_name.epub" \
+				| tr '[A-Z]' '[a-z]')" ]]; then
+			error "output file name ($epub_name.epub) conflicts" \
+				"with an input file."
+		fi
+
+		if [[ "$filename_label_given" -eq 1 ]]; then
+			toc_volume_labels+=("${epub%.epub}")
+		fi
 	done
 
 	# Sort input files and save them to epub_files
