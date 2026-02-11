@@ -429,6 +429,9 @@ build_all_filters() {
 	build_element_filters rights
 	build_element_filters date opf:event publication published
 	build_element_filters date opf:event modification modified
+	if [[ -n "$new_modified" ]]; then
+		removing_filter+="<dc:date[[:blank:]]*>|"
+	fi
 
 	removing_filter="${removing_filter%?}"
 	color_filter="${color_filter%?}"
